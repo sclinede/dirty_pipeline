@@ -8,8 +8,9 @@ module DirtyPipeline
       throw :fail_with_error, error
     end
 
-    def Success(after_commit: nil, **output)
+    def Success(after_commit: nil, **output, &block)
       result = [output]
+      after_commit = Array(after_commit) << block if block_given?
       result += Array(after_commit) if after_commit
       throw :success, result
     end
@@ -17,6 +18,7 @@ module DirtyPipeline
     def self.call(*args, **kwargs)
       subject = args.shift
       instance = new(*args, **kwargs)
+      instance.compensate(subject) if instance.respond_to?(:compensate)
       instance.call(subject)
     end
   end
