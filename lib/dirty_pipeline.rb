@@ -1,5 +1,13 @@
 require "dirty_pipeline/version"
 
 module DirtyPipeline
-  # Your code goes here...
+  require_relative "dirty_pipeline/locker.rb"
+  require_relative "dirty_pipeline/storage.rb"
+  require_relative "dirty_pipeline/transition.rb"
+  require_relative "dirty_pipeline/base.rb"
+
+  # This method should yield raw Redis connection
+  def self.with_redis
+    fail NotImplementedError
+  end
 end
