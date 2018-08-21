@@ -130,14 +130,23 @@ module DirtyPipeline
       self
     end
 
-    def failed?
-      # return true if storage.failed?
+    def OnFailed(callback = nil)
+      return self unless storage.failed?
+      if block_given?
+        yield(self)
+      else
+        callback.call(self)
+      end
+      self
+    end
+
+    def errored?
       return if succeeded.nil?
       ready? && !succeeded
     end
 
     def OnError(callback = nil)
-      return self unless failed?
+      return self unless errored?
       if block_given?
         yield(self)
       else
