@@ -120,7 +120,7 @@ module DirtyPipeline
       succeeded
     end
 
-    def OnSuccess(callback = nil)
+    def when_success(callback = nil)
       return self unless success?
       if block_given?
         yield(self)
@@ -130,7 +130,7 @@ module DirtyPipeline
       self
     end
 
-    def OnFailed(callback = nil)
+    def when_failed(callback = nil)
       return self unless storage.failed?
       if block_given?
         yield(self)
@@ -145,7 +145,7 @@ module DirtyPipeline
       ready? && !succeeded
     end
 
-    def OnError(callback = nil)
+    def when_error(callback = nil)
       return self unless errored?
       if block_given?
         yield(self)
@@ -159,7 +159,7 @@ module DirtyPipeline
       storage.pipeline_status.nil?
     end
 
-    def OnProcessing(callback = nil)
+    def when_processing(callback = nil)
       return self unless storage.processing?
       if block_given?
         yield(self)
