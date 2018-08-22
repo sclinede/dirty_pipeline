@@ -8,8 +8,8 @@ module DirtyPipeline
       throw :fail_with_error, error
     end
 
-    def Success(after_commit: nil, **output, &block)
-      result = [output]
+    def Success(output = nil, after_commit: nil, &block)
+      result = [output.to_h]
       after_commit = Array(after_commit) << block if block_given?
       result += Array(after_commit) if after_commit
       throw :success, result
