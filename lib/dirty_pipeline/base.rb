@@ -84,6 +84,7 @@ module DirtyPipeline
     end
 
     def call(*args)
+      return self if succeeded == false
       self.succeeded = nil
       after_commit = nil
 

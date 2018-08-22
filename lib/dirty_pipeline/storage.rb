@@ -94,7 +94,6 @@ module DirtyPipeline
           r.del(pipeline_status_key)
         end
       end
-      # store in Redis for better speed
       store["pipeline_status"] = value
     end
 
