@@ -56,9 +56,6 @@ module DirtyPipeline
         @transition_args = locker.storage.last_event["input"]
       end
 
-      # RETRY MODE
-      # if state is not RETRY_STATE - finish
-      # if state is RETRY_STATE - start
       def skip_any_action?
         storage.status != Storage::RETRY_STATUS
       end

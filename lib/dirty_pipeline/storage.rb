@@ -17,7 +17,7 @@ module DirtyPipeline
     def init_store(store_field)
       self.store = subject.send(store_field).to_h
       clear! if store.empty?
-      return if (store.keys & %w(status events errors state)).size == 4
+      return if (store.keys & %w(cache status events errors state)).size == 5
       raise InvalidPipelineStorage, store
     end
 
@@ -27,6 +27,7 @@ module DirtyPipeline
         "status" => nil,
         "pipeline_status" => nil,
         "state" => {},
+        "cache" => {},
         "events" => [],
         "errors" => [],
       )
@@ -99,6 +100,7 @@ module DirtyPipeline
 
     def commit_pipeline_status!(value = nil)
       self.pipeline_status = value
+      store["cache"].clear
       commit!
     end
     alias :reset_pipeline_status! :commit_pipeline_status!

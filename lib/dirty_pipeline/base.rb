@@ -76,105 +76,53 @@ module DirtyPipeline
       storage.reset_pipeline_status!
     end
 
-    attr_reader :subject, :error, :storage
-    def initialize(subject)
-      @subject = subject
-      @storage = Storage.new(subject, self.class.pipeline_storage)
-      @locker = Locker.new(@subject, @storage)
-    end
-
-    def call(*args)
-      return self if succeeded == false
-      self.succeeded = nil
-      after_commit = nil
-
-      # transaction with support of external calls
-      transaction(*args) do |destination, action, *transition_args|
-        output = {}
-        fail_cause = nil
-
-        output, *after_commit = catch(:success) do
-          fail_cause = catch(:fail_with_error) do
-            return Abort() if catch(:abort) do
-              throw :success, action.(subject, *transition_args)
-            end
-          end
-          nil
-        end
-
-        if fail_cause
-          ExpectedError(fail_cause)
-        else
-          Success(destination, output)
-        end
-      end
-
-      Array(after_commit).each { |cb| cb.call(subject) } if after_commit
-      self
-    end
-
     def clear!
       storage.clear!
     end
 
-    def success?
-      succeeded
+    def cache
+      storage.store["cache"]
     end
 
-    def when_success(callback = nil)
-      return self unless success?
-      if block_given?
-        yield(self)
-      else
-        callback.call(self)
+    attr_reader :subject, :error, :storage, :status
+    def initialize(subject)
+      @subject = subject
+      @storage = Storage.new(subject, self.class.pipeline_storage)
+      @locker = Locker.new(@subject, @storage)
+      @status = Status.new(self)
+    end
+
+    def call(*args)
+      Result() do
+        after_commit = nil
+        # transaction with support of external calls
+        transaction(*args) do |destination, action, *targs|
+          output = {}
+          fail_cause = nil
+
+          output, *after_commit = catch(:success) do
+            fail_cause = catch(:fail_with_error) do
+              Abort() if catch(:abort) do
+                throw :success, action.(self, *targs)
+              end
+            end
+            nil
+          end
+
+          if fail_cause
+            ExpectedError(fail_cause)
+          else
+            Success(destination, output)
+          end
+        end
+
+        Array(after_commit).each { |cb| cb.call(subject) } if after_commit
       end
-      self
-    end
-
-    def when_failed(callback = nil)
-      return self unless storage.failed?
-      if block_given?
-        yield(self)
-      else
-        callback.call(self)
-      end
-      self
-    end
-
-    def errored?
-      return if succeeded.nil?
-      ready? && !succeeded
-    end
-
-    def when_error(callback = nil)
-      return self unless errored?
-      if block_given?
-        yield(self)
-      else
-        callback.call(self)
-      end
-      self
-    end
-
-    def ready?
-      storage.pipeline_status.nil?
-    end
-
-    def when_processing(callback = nil)
-      return self unless storage.processing?
-      if block_given?
-        yield(self)
-      else
-        callback.call(self)
-      end
-      self
     end
 
     private
 
-    attr_writer :error
     attr_reader :locker
-    attr_accessor :succeeded, :previous_status
 
     def find_subject_args
       subject.id
@@ -188,6 +136,10 @@ module DirtyPipeline
       self.class.cleanup_delay || DEFAULT_CLEANUP_DELAY
     end
 
+    def Result()
+      status.wrap { yield }
+    end
+
     def Retry(error, *args)
       storage.save_retry!(error)
       Shipping::PipelineWorker.perform_in(
@@ -199,25 +151,26 @@ module DirtyPipeline
     end
 
     def ExpectedError(cause)
-      self.error = cause
+      status.error = cause
       storage.fail_event!
-      self.succeeded = false
+      status.succeeded = false
     end
 
-    def Error(error)
+    def Exception(error)
       storage.save_exception!(error)
-      self.error = error
-      self.succeeded = false
+      status.error = error
+      status.succeeded = false
     end
 
     def Abort()
-      self.succeeded = false
+      status.succeeded = false
       throw :abort_transaction, true
     end
 
     def Success(destination, output)
+      cache.clear
       storage.complete!(output, destination)
-      self.succeeded = true
+      status.succeeded = true
     end
 
     def try_again?(max_attempts_count)
@@ -252,6 +205,7 @@ module DirtyPipeline
           destination, action, max_attempts_count =
             find_transition(transition).values_at(:to, :action, :attempts)
 
+          status.action_pool.unshift(action)
           subject.transaction(requires_new: true) do
             raise ActiveRecord::Rollback if catch(:abort_transaction) do
               yield(destination, action, *transition_args); nil
@@ -261,10 +215,16 @@ module DirtyPipeline
           if try_again?(max_attempts_count)
             Retry(error)
           else
-            # FIXME: Somehow :error is a Hash, all the time
-            Error(error)
+            Exception(error)
           end
           raise
+        ensure
+          if status.succeeded == false
+            status.action_pool.each do |reversable_action|
+              next unless reversable_action.respond_to?(:undo)
+              reversable_action.undo(self, *transition_args)
+            end
+          end
         end
       end
     end

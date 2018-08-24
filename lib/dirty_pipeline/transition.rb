@@ -15,11 +15,25 @@ module DirtyPipeline
       throw :success, result
     end
 
+    def self.undo(*args, **kwargs)
+      pipeline = args.shift
+      instance = new(pipeline, *args, **kwargs)
+      return unless instance.respond_to?(:undo)
+      instance.undo(pipeline.subject)
+    end
+
     def self.call(*args, **kwargs)
-      subject = args.shift
-      instance = new(*args, **kwargs)
-      instance.compensate(subject) if instance.respond_to?(:compensate)
-      instance.call(subject)
+      pipeline = args.shift
+      new(pipeline, *args, **kwargs).call(pipeline.subject)
+    end
+
+    attr_reader :pipeline
+    def initialize(pipeline, *, **)
+      @pipeline = pipeline
+    end
+
+    def fetch(key)
+      pipeline.cache.fetch(key) { pipeline.cache[key] = yield }
     end
   end
 end
