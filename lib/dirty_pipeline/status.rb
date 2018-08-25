@@ -16,26 +16,18 @@ module DirtyPipeline
     end
 
     def success?
-      succeeded
+      !!succeeded
     end
 
     def when_success(callback = nil)
       return self unless success?
-      if block_given?
-        yield(self)
-      else
-        callback.call(self)
-      end
+      block_given? ? yield(self) : callback.(self)
       self
     end
 
     def when_failed(callback = nil)
       return self unless storage.failed?
-      if block_given?
-        yield(self)
-      else
-        callback.call(self)
-      end
+      block_given? ? yield(self) : callback.(self)
       self
     end
 
@@ -46,11 +38,7 @@ module DirtyPipeline
 
     def when_error(callback = nil)
       return self unless errored?
-      if block_given?
-        yield(self)
-      else
-        callback.call(self)
-      end
+      block_given? ? yield(self) : callback.(self)
       self
     end
 
@@ -60,11 +48,7 @@ module DirtyPipeline
 
     def when_processing(callback = nil)
       return self unless storage.processing?
-      if block_given?
-        yield(self)
-      else
-        callback.call(self)
-      end
+      block_given? ? yield(self) : callback.(self)
       self
     end
   end

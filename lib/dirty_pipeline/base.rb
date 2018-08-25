@@ -64,8 +64,16 @@ module DirtyPipeline
       end
     end
 
+    attr_reader :subject, :error, :storage, :status, :transitions_chain
+    def initialize(subject)
+      @subject = subject
+      @storage = Storage.new(subject, self.class.pipeline_storage)
+      @status = Status.new(self)
+      @transitions_chain = []
+    end
+
     def enqueue(transition_name, *args)
-      Shipping::PipelineWorker.perform_async(
+      DirtyPipeline::Worker.perform_async(
         "enqueued_pipeline" => self.class.to_s,
         "find_subject_args" => find_subject_args,
         "transition_args" => args.unshift(transition_name),
@@ -81,18 +89,27 @@ module DirtyPipeline
     end
 
     def cache
-      storage.store["cache"]
+      storage.last_event["cache"]
     end
 
-    attr_reader :subject, :error, :storage, :status
-    def initialize(subject)
-      @subject = subject
-      @storage = Storage.new(subject, self.class.pipeline_storage)
-      @locker = Locker.new(@subject, @storage)
-      @status = Status.new(self)
+    def chain(*args)
+      transitions_chain << args
+      self
+    end
+
+    def execute
+      Result() do
+        transitions_chain.each do |targs|
+          call(*targs)
+          storage.increment_transaction_depth!
+        end
+        storage.reset_transaction_depth!
+        transitions_chain.clear
+      end
     end
 
     def call(*args)
+      storage.reset_transaction_depth! if transitions_chain.empty?
       Result() do
         after_commit = nil
         # transaction with support of external calls
@@ -110,7 +127,7 @@ module DirtyPipeline
           end
 
           if fail_cause
-            ExpectedError(fail_cause)
+            Failure(fail_cause)
           else
             Success(destination, output)
           end
@@ -120,9 +137,25 @@ module DirtyPipeline
       end
     end
 
-    private
+    def schedule_retry
+      ::DirtyPipeline::Worker.perform_in(
+        retry_delay,
+        "enqueued_pipeline" => self.class.to_s,
+        "find_subject_args" => find_subject_args,
+        "retry" => true,
+      )
+    end
 
-    attr_reader :locker
+    def schedule_cleanup
+      ::DirtyPipeline::Worker.perform_in(
+        cleanup_delay,
+        "enqueued_pipeline" => self.class.to_s,
+        "find_subject_args" => find_subject_args,
+        "transition_args" => [Locker::CLEAN],
+      )
+    end
+
+    private
 
     def find_subject_args
       subject.id
@@ -136,29 +169,19 @@ module DirtyPipeline
       self.class.cleanup_delay || DEFAULT_CLEANUP_DELAY
     end
 
+    def transaction(*args)
+      ::DirtyPipeline::Transaction.new(self).call(*args) do |*targs|
+        yield(*targs)
+      end
+    end
+
     def Result()
       status.wrap { yield }
     end
 
-    def Retry(error, *args)
-      storage.save_retry!(error)
-      Shipping::PipelineWorker.perform_in(
-        retry_delay,
-        "enqueued_pipeline" => self.class.to_s,
-        "find_subject_args" => find_subject_args,
-        "retry" => true,
-      )
-    end
-
-    def ExpectedError(cause)
-      status.error = cause
+    def Failure(cause)
       storage.fail_event!
-      status.succeeded = false
-    end
-
-    def Exception(error)
-      storage.save_exception!(error)
-      status.error = error
+      status.error = cause
       status.succeeded = false
     end
 
@@ -171,62 +194,6 @@ module DirtyPipeline
       cache.clear
       storage.complete!(output, destination)
       status.succeeded = true
-    end
-
-    def try_again?(max_attempts_count)
-      return unless max_attempts_count
-      storage.last_event["attempts_count"].to_i < max_attempts_count
-    end
-
-    def find_transition(name)
-      if (const_name = self.class.const_get(name) rescue nil)
-        name = const_name.to_s
-      end
-      self.class.transitions_map.fetch(name.to_s).tap do |from:, **kwargs|
-        next if from == Array(storage.status)
-        next if from.include?(storage.status.to_s)
-        raise InvalidTransition, "from `#{storage.status}` by `#{name}`"
-      end
-    end
-
-    def schedule_cleanup
-      Shipping::PipelineWorker.perform_in(
-        cleanup_delay,
-        "enqueued_pipeline" => self.class.to_s,
-        "find_subject_args" => find_subject_args,
-        "transition_args" => [Locker::CLEAN],
-      )
-    end
-
-    def transaction(*args)
-      locker.with_lock(*args) do |transition, *transition_args|
-        begin
-          schedule_cleanup
-          destination, action, max_attempts_count =
-            find_transition(transition).values_at(:to, :action, :attempts)
-
-          status.action_pool.unshift(action)
-          subject.transaction(requires_new: true) do
-            raise ActiveRecord::Rollback if catch(:abort_transaction) do
-              yield(destination, action, *transition_args); nil
-            end
-          end
-        rescue => error
-          if try_again?(max_attempts_count)
-            Retry(error)
-          else
-            Exception(error)
-          end
-          raise
-        ensure
-          if status.succeeded == false
-            status.action_pool.each do |reversable_action|
-              next unless reversable_action.respond_to?(:undo)
-              reversable_action.undo(self, *transition_args)
-            end
-          end
-        end
-      end
     end
   end
 end

@@ -17,8 +17,15 @@ module DirtyPipeline
     def init_store(store_field)
       self.store = subject.send(store_field).to_h
       clear! if store.empty?
-      return if (store.keys & %w(cache status events errors state)).size == 5
+      return if valid_store?
       raise InvalidPipelineStorage, store
+    end
+
+    def valid_store?
+      (
+        store.keys &
+          %w(status pipeline_status events errors state transaction_depth)
+      ).size == 6
     end
 
     def clear
@@ -27,9 +34,9 @@ module DirtyPipeline
         "status" => nil,
         "pipeline_status" => nil,
         "state" => {},
-        "cache" => {},
         "events" => [],
         "errors" => [],
+        "transaction_depth" => 1
       )
       DirtyPipeline.with_redis { |r| r.del(pipeline_status_key) }
     end
@@ -43,7 +50,8 @@ module DirtyPipeline
       events << {
         "transition" => transition,
         "args" => args,
-        "created_at" => Time.now
+        "created_at" => Time.now,
+        "cache" => {},
       }
       increment_attempts_count
       self.pipeline_status = PROCESSING_STATUS
@@ -100,7 +108,7 @@ module DirtyPipeline
 
     def commit_pipeline_status!(value = nil)
       self.pipeline_status = value
-      store["cache"].clear
+      last_event["cache"].clear
       commit!
     end
     alias :reset_pipeline_status! :commit_pipeline_status!
@@ -136,6 +144,28 @@ module DirtyPipeline
 
     def last_error
       errors.last.to_h
+    end
+
+    def reset_transaction_depth
+      store["transaction_depth"] = 1
+    end
+
+    def reset_transaction_depth!
+      reset_transaction_depth
+      commit!
+    end
+
+    def transaction_depth
+      store["transaction_depth"]
+    end
+
+    def increment_transaction_depth
+      store["transaction_depth"] = store["transaction_depth"].to_i + 1
+    end
+
+    def increment_transaction_depth!
+      increment_transaction_depth
+      commit!
     end
 
     def increment_attempts_count
