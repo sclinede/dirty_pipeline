@@ -5,46 +5,78 @@ module DirtyPipeline
       @pipeline = pipeline
       @storage = pipeline.storage
       @subject = pipeline.subject
-      @locker = Locker.new(@subject, @storage)
+    end
+
+    def clean(*args)
+      return unless in_progress?
+
+      transition = storage.last_event["transition"]
+      targs = storage.last_event["args"]
+
+      return pipeline.schedule_cleanup(*targs) unless undoable?(transition)
+
+      action = find_transition(transition).values_at(:action)
+      action.undo(*targs)
+      storage.finish_transition!(transition)
+    rescue
+      pipeline.schedule_cleanup(*targs)
+      raise
+    end
+
+    def retry
+      return unless retryable?
+
+      transition = storage.last_event["transition"]
+      transition_args = storage.last_event["args"]
+      storage.start_retry!
+
+      with_transaction(transition, *transition_args) { |*targs| yield(*targs) }
     end
 
     def call(*args)
-      locker.with_lock(*args) do |transition, *transition_args|
-        pipeline.schedule_cleanup
-        begin
-          destination, action, max_attempts_count =
-            find_transition(transition).values_at(:to, :action, :attempts)
+      return if in_progress?
 
-          # status.action_pool.unshift(action)
-          subject.transaction(requires_new: true) do
-            raise ActiveRecord::Rollback if catch(:abort_transaction) do
-              yield(destination, action, *transition_args); nil
-            end
-          end
-        rescue => error
-          if try_again?(max_attempts_count)
-            Retry(error)
-          else
-            Exception(error)
-          end
-          raise
-        ensure
-          unless pipeline.status.success?
-            storage.events
-                   .last(storage.transaction_depth)
-                   .reverse
-                   .each do |params|
-              transition = params["transition"]
-              targs = params["args"]
-              reversable_action = find_transition(transition).fetch(:action)
-              reversable_action.undo(self, *targs)
-            end
-          end
-        end
-      end
+      transition, *transition_args = args
+      storage.start!(transition, transition_args)
+      pipeline.schedule_cleanup(*transition_args)
+
+      with_transaction(transition, *transition_args) { |*targs| yield(*targs) }
     end
 
     private
+
+    def with_transaction(transition, *args)
+      begin
+        destination, action, max_attempts_count =
+          find_transition(transition).values_at(:to, :action, :attempts)
+
+        # status.action_pool.unshift(action)
+        subject.transaction(requires_new: true) do
+          raise ActiveRecord::Rollback if catch(:abort_transaction) do
+            yield(destination, action, *args); nil
+          end
+        end
+      rescue => error
+        next Retry(error) if try_again?(max_attempts_count)
+        Exception(error)
+        action.undo(*transition_args)
+        storage.finish_transition!(transition)
+        raise
+      end
+      storage.finish_transition!(transition)
+    end
+
+    def undoable?(transition)
+      storage.transaction_queue.last == transition
+    end
+
+    def in_progress?
+      storage.transaction_queue.size.positive?
+    end
+
+    def retryable?
+      storage.status == Storage::RETRY_STATUS
+    end
 
     def Retry(error, *args)
       storage.save_retry!(error)
@@ -53,6 +85,7 @@ module DirtyPipeline
 
     def Exception(error)
       storage.save_exception!(error)
+      Status.error(error)
       pipeline.status.error = error
       pipeline.status.succeeded = false
     end

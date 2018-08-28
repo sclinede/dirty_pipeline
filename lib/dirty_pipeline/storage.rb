@@ -38,12 +38,19 @@ module DirtyPipeline
         "errors" => [],
         "transaction_depth" => 1
       )
-      DirtyPipeline.with_redis { |r| r.del(pipeline_status_key) }
+      DirtyPipeline.with_redis do |r|
+        r.del(pipeline_status_key)
+        r.del(pipeline_queue_key)
+      end
     end
 
     def clear!
       clear
       commit!
+    end
+
+    def transaction_queue
+      DirtyPipeline.with_redis { |r| r.lrange(pipeline_queue_key, 0, -1)}
     end
 
     def start!(transition, args)
@@ -54,6 +61,7 @@ module DirtyPipeline
         "cache" => {},
       }
       increment_attempts_count
+      start_transition!(transition)
       self.pipeline_status = PROCESSING_STATUS
       # self.status = "processing", should be set by Locker
       commit!
@@ -65,6 +73,17 @@ module DirtyPipeline
       self.pipeline_status = PROCESSING_STATUS
       # self.status = "processing", should be set by Locker
       commit!
+    end
+
+    def start_transition!(transition)
+      DirtyPipeline.with_redis { |r| r.rpush(pipeline_queue_key, transition) }
+    end
+
+    def finish_transition!(transition)
+      DirtyPipeline.with_redis do |r|
+        # remove from tail of the queue
+        r.lrem(pipeline_queue_key, -1, transition)
+      end
     end
 
     def complete!(output, destination)
@@ -93,6 +112,10 @@ module DirtyPipeline
 
     def pipeline_status_key
       "pipeline-status:#{subject.class}:#{subject.id}:#{field}"
+    end
+
+    def pipeline_queue_key
+      "pipeline-queue:#{subject.class}:#{subject.id}:#{field}"
     end
 
     def pipeline_status=(value)
@@ -180,7 +203,7 @@ module DirtyPipeline
     end
 
     def save_retry(error)
-      save_error(error)
+      save_exception(error)
       self.pipeline_status = RETRY_STATUS
     end
 

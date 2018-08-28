@@ -68,16 +68,8 @@ module DirtyPipeline
     def initialize(subject)
       @subject = subject
       @storage = Storage.new(subject, self.class.pipeline_storage)
-      @status = Status.new(self)
+      @status = Status.success(subject)
       @transitions_chain = []
-    end
-
-    def enqueue(transition_name, *args)
-      DirtyPipeline::Worker.perform_async(
-        "enqueued_pipeline" => self.class.to_s,
-        "find_subject_args" => find_subject_args,
-        "transition_args" => args.unshift(transition_name),
-      )
     end
 
     def reset!
@@ -98,43 +90,58 @@ module DirtyPipeline
     end
 
     def execute
-      Result() do
-        transitions_chain.each do |targs|
-          call(*targs)
-          storage.increment_transaction_depth!
-        end
-        storage.reset_transaction_depth!
-        transitions_chain.clear
+      transition_args = transitions_chain.shift
+      return status unless transition_args
+      if status.success?
+        call(*transition_args, &method(:execute))
+      else
+        execute
       end
     end
 
+    def retry
+      transaction.retry
+    end
+
+    def clean(*args)
+      transaction.clean(*args)
+    end
+
     def call(*args)
-      storage.reset_transaction_depth! if transitions_chain.empty?
-      Result() do
-        after_commit = nil
-        # transaction with support of external calls
-        transaction(*args) do |destination, action, *targs|
-          output = {}
-          fail_cause = nil
+      after_commit = nil
+      transaction.call(*args) do |destination, action, *targs|
+        output = {}
+        fail_cause = nil
 
-          output, *after_commit = catch(:success) do
-            fail_cause = catch(:fail_with_error) do
-              Abort() if catch(:abort) do
-                throw :success, action.(self, *targs)
-              end
+        output, *after_commit = catch(:success) do
+          fail_cause = catch(:fail_with_error) do
+            Abort() if catch(:abort) do
+              throw :success, action.call(self, *targs)
             end
-            nil
           end
-
-          if fail_cause
-            Failure(fail_cause)
-          else
-            Success(destination, output)
-          end
+          nil
         end
 
-        Array(after_commit).each { |cb| cb.call(subject) } if after_commit
+        if fail_cause
+          Failure(fail_cause)
+        else
+          Success(destination, output)
+        end
+
+        yield if block_given?
       end
+
+      Array(after_commit).each { |cb| cb.call(subject) } if after_commit
+      status
+    end
+
+    def schedule_cleanup(*args)
+      ::DirtyPipeline::Worker.perform_in(
+        cleanup_delay,
+        "enqueued_pipeline" => self.class.to_s,
+        "find_subject_args" => find_subject_args,
+        "transition_args" => args.unshift("clean"),
+      )
     end
 
     def schedule_retry
@@ -142,17 +149,18 @@ module DirtyPipeline
         retry_delay,
         "enqueued_pipeline" => self.class.to_s,
         "find_subject_args" => find_subject_args,
-        "retry" => true,
+        "transition_args" => ["retry"],
       )
     end
 
-    def schedule_cleanup
-      ::DirtyPipeline::Worker.perform_in(
-        cleanup_delay,
-        "enqueued_pipeline" => self.class.to_s,
-        "find_subject_args" => find_subject_args,
-        "transition_args" => [Locker::CLEAN],
-      )
+    def when_success
+      yield(self) if status.success?
+      self
+    end
+
+    def when_failure
+      yield(self) if status.failure?
+      self
     end
 
     private
@@ -169,31 +177,24 @@ module DirtyPipeline
       self.class.cleanup_delay || DEFAULT_CLEANUP_DELAY
     end
 
-    def transaction(*args)
-      ::DirtyPipeline::Transaction.new(self).call(*args) do |*targs|
-        yield(*targs)
-      end
-    end
-
-    def Result()
-      status.wrap { yield }
+    def transaction
+      ::DirtyPipeline::Transaction.new(self)
     end
 
     def Failure(cause)
       storage.fail_event!
-      status.error = cause
-      status.succeeded = false
+      self.status = Result.error(cause)
     end
 
     def Abort()
-      status.succeeded = false
+      self.status = Result.failure(:aborted)
       throw :abort_transaction, true
     end
 
     def Success(destination, output)
       cache.clear
       storage.complete!(output, destination)
-      status.succeeded = true
+      self.status = Result.success(subject)
     end
   end
 end
