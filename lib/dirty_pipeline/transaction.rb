@@ -24,19 +24,19 @@ module DirtyPipeline
     end
 
     def retry
-      return unless retryable?
-
       transition = storage.last_event["transition"]
       transition_args = storage.last_event["args"]
+
+      return unless retryable?(transition)
       storage.start_retry!
 
       with_transaction(transition, *transition_args) { |*targs| yield(*targs) }
     end
 
     def call(*args)
-      return if in_progress?
-
       transition, *transition_args = args
+
+      return if in_progress?(transition)
       storage.start!(transition, transition_args)
       pipeline.schedule_cleanup(*transition_args)
 
@@ -70,12 +70,14 @@ module DirtyPipeline
       storage.transaction_queue.last == transition
     end
 
-    def in_progress?
-      storage.transaction_queue.size.positive?
+    def in_progress?(transition)
+      storage.transaction_queue.size.positive? &&
+        storage.transaction_queue.include?(transition)
     end
 
-    def retryable?
-      storage.status == Storage::RETRY_STATUS
+    def retryable?(transition)
+      storage.status == Storage::RETRY_STATUS &&
+        storage.transaction_queue.last == transition
     end
 
     def Retry(error, *args)

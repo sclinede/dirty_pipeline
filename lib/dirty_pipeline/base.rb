@@ -68,7 +68,7 @@ module DirtyPipeline
     def initialize(subject)
       @subject = subject
       @storage = Storage.new(subject, self.class.pipeline_storage)
-      @status = Status.success(subject)
+      @status = storage.ready? ? Status.success(subject) : Status.failure
       @transitions_chain = []
     end
 
