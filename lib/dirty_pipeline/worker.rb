@@ -2,23 +2,26 @@ require 'sidekiq'
 module DirtyPipeline
   class Worker
     include Sidekiq::Worker
+    using StringCamelcase
 
     # args should contain - "enqueued_pipeline"
     # args should contain - some args to find_subject
     # args should contain - some args to make transition
-    def perform(options)
-      # FIXME: get rid of ActiveSupport #constantize
-      pipeline_klass = options.fetch("enqueued_pipeline").constantize
+    def perform(options = {})
+      pipeline_klass =
+        Kernel.const_get(options.fetch("enqueued_pipeline").to_s.camelcase)
       subject = pipeline_klass.find_subject(*options.fetch("find_subject_args"))
-      transition, *targs = options.fetch("transition_args")
-      case transition
-      when "clean"
-        pipeline_klass.new(subject).clean(transition, *targs)
+      transaction_id = options.fetch("transaction_id")
+      pipeline = pipeline_klass.new(subject, uuid: transaction_id)
+      operation = options.fetch("operation")
+
+      case operation
+      when "cleanup"
+        pipeline.clean
       when "retry"
-        pipeline_klass.new(subject).retry
-      else
-        pipeline_klass.new(subject).call(transition, *targs)
+        return pipeline.retry
       end
+      pipeline.call
     end
   end
 end

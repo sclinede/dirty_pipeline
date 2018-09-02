@@ -1,23 +1,23 @@
 module DirtyPipeline
   class Status
-    attr_accessor :error, :succeeded
-    attr_reader :storage, :pipeline
+    attr_reader :success, :tag, :data
 
-    def self.success(data)
-      new(true, data)
+    def self.success(data, tag: :success)
+      new(true, data, tag)
     end
 
-    def self.failure(data)
-      new(false, data)
+    def self.failure(data, tag: :exception)
+      new(false, data, tag)
     end
 
-    def initialize(success, data)
+    def initialize(success, data, tag = nil)
       @success = success
       @data = data
+      @tag = tag
     end
 
     def success?
-      !!succeeded
+      !!success
     end
 
     def failure?
