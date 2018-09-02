@@ -78,14 +78,7 @@ module DirtyPipeline
 
     def retry
       return unless (event = load_event(railway.queue.processing_event))
-
-      transaction(event).retry do |destination, action, *args|
-        state_changes = process_action(action, event, *args)
-        Success(event, state_changes, destination) if status.success?
-      end
-      call_next
-
-      self
+      execute(event, :retry)
     end
 
     def schedule_cleanup
@@ -123,16 +116,12 @@ module DirtyPipeline
 
     private
 
-    def execute(event)
-      transaction(event).call do |destination, action, *args|
+    def execute(event, type = :call)
+      transaction(event).public_send(type) do |destination, action, *args|
         state_changes = process_action(action, event, *args)
-        Success(event, state_changes, destination) if status.success?
+        next if status.failure?
+        Success(event, state_changes, destination)
       end
-
-      if railway.queue.to_a.empty? && status.success?
-        railway.switch_to(:finalize)
-      end
-
       call_next
 
       self
