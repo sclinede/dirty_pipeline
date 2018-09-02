@@ -81,7 +81,7 @@ module DirtyPipeline
 
       transaction(event).retry do |destination, action, *args|
         state_changes = process_action(action, event, *args)
-        Success(event, state_changes, destination)
+        Success(event, state_changes, destination) if status.success?
       end
       call_next
 
@@ -126,7 +126,7 @@ module DirtyPipeline
     def execute(event)
       transaction(event).call do |destination, action, *args|
         state_changes = process_action(action, event, *args)
-        Success(event, state_changes, destination)
+        Success(event, state_changes, destination) if status.success?
       end
 
       if railway.queue.to_a.empty? && status.success?
