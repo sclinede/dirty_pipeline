@@ -12,7 +12,6 @@ module DirtyPipeline
           [operation, create_queue(operation)]
         end
       ]
-      switch_to(DEFAULT_OPERATIONS.first)
     end
 
     def clear!
@@ -69,6 +68,7 @@ module DirtyPipeline
     end
 
     def start_transaction!
+      switch_to(DEFAULT_OPERATIONS.first) unless active
       DirtyPipeline.with_redis { |r| r.set(active_transaction_key, @tx_id) }
     end
 

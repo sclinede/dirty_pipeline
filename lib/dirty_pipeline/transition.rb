@@ -16,9 +16,8 @@ module DirtyPipeline
       event, pipeline, *args = args
       instance = new(event, *args, **kwargs)
       return unless instance.respond_to?(:finalize)
-      instance.finalize(pipeline.subject).tap do
-        pipeline.railway.switch_to(:call)
-      end
+      pipeline.railway.switch_to(:call)
+      instance.finalize(pipeline.subject)
     end
 
     def self.undo(*args, **kwargs)
@@ -32,10 +31,11 @@ module DirtyPipeline
       event, pipeline, *args = args
       instance = new(event, *args, **kwargs)
       pipeline.railway[:undo] << event if instance.respond_to?(:undo)
-      pipeline.railway[:finalize] << event if instance.respond_to?(:finalize)
-      new(event, *args, **kwargs).call(pipeline.subject).tap do
-        pipeline.railway.switch_to(:finalize) if instance.respond_to?(:finalize)
+      if instance.respond_to?(:finalize)
+        pipeline.railway[:finalize] << event
+        pipeline.railway.switch_to(:finalize)
       end
+      new(event, *args, **kwargs).call(pipeline.subject)
     end
 
     attr_reader :event

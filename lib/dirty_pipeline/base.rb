@@ -22,7 +22,7 @@ module DirtyPipeline
       using StringCamelcase
 
       def transition(name, from:, to:, action: nil, attempts: 1)
-        action ||= const_get(name.to_s.camelcase) rescue nil
+        action ||= const_get(name.to_s.camelcase(:upper)) rescue nil
         action ||= method(name) if respond_to?(name)
         @transitions_map[name.to_s] = {
           action: action,
@@ -67,7 +67,7 @@ module DirtyPipeline
 
     def call
       return self if (serialized_event = railway.next).nil?
-      execute(load_event(serialized_event), :call)
+      execute(load_event(serialized_event), tx_method: :call)
     end
     alias :call_next :call
 
@@ -79,7 +79,7 @@ module DirtyPipeline
 
     def retry
       return unless (event = load_event(railway.queue.processing_event))
-      execute(event, :retry)
+      execute(event, tx_id: :retry)
     end
 
     def schedule_cleanup
@@ -117,7 +117,7 @@ module DirtyPipeline
 
     private
 
-    def execute(event, tx_method)
+    def execute(event, tx_method:)
       transaction(event).public_send(tx_method) do |destination, action, *args|
         state_changes = process_action(action, event, *args)
         next if status.failure?
@@ -171,11 +171,12 @@ module DirtyPipeline
     end
 
     def Failure(event, cause)
-      event.failure!
       railway.switch_to(:undo)
       if cause.eql?(:abort)
+        event.abort!
         @status = Status.failure(subject, tag: :aborted)
       else
+        event.failure!
         @status = Status.failure(cause, tag: :error)
       end
       throw :abort_transaction, true

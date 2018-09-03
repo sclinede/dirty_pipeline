@@ -45,7 +45,7 @@ module DirtyPipeline
 
     def with_abort_handling
       return unless catch(:abort_transaction) { yield; nil }
-      event.abort! unless event.failure?
+      event.abort! unless event.abort?
       raise ActiveRecord::Rollback
     end
   end
