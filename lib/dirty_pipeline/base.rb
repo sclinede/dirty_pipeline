@@ -55,7 +55,7 @@ module DirtyPipeline
     end
 
     def clear!
-      storage.clear!
+      storage.reset!
       reset!
     end
 

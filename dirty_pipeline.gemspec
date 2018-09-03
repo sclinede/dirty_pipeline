@@ -21,7 +21,15 @@ Gem::Specification.new do |spec|
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
+  # temporary dependency
+  spec.add_runtime_dependency "sidekiq"
+  spec.add_runtime_dependency "redis"
+  spec.add_runtime_dependency "nanoid"
+
   spec.add_development_dependency "bundler", "~> 1.16"
   spec.add_development_dependency "rake", "~> 10.0"
   spec.add_development_dependency "rspec", "~> 3.0"
+  spec.add_development_dependency "dotenv"
+  spec.add_development_dependency "timecop"
+  spec.add_development_dependency "pry"
 end

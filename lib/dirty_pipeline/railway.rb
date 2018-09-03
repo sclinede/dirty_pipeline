@@ -9,7 +9,7 @@ module DirtyPipeline
       @root = "dirty-pipeline-rail:#{subject.class}:#{subject.id}:"
       @queues = Hash[
         DEFAULT_OPERATIONS.map do |operation|
-          [operation, Queue.new(operation, subject, transaction_id)]
+          [operation, create_queue(operation)]
         end
       ]
     end
@@ -33,10 +33,7 @@ module DirtyPipeline
 
     def queue(operation_name = active)
       @queues.fetch(operation_name.to_s) do
-        @queues.store(
-          operation_name,
-          Queue.new(operation_name, @subject_class, @subject_id, @tx_id)
-        )
+        @queues.store(operation_name, create_queue(operation_name))
       end
     end
     alias :[] :queue
@@ -52,7 +49,15 @@ module DirtyPipeline
     end
     alias :operation :active
 
+    def running_transaction
+      DirtyPipeline.with_redis { |r| r.get(active_transaction_key) }
+    end
+
     private
+
+    def create_queue(operation_name)
+      Queue.new(operation_name, @subject_class, @subject_id, @tx_id)
+    end
 
     def active_transaction_key
       "#{@root}:active_transaction"
@@ -70,10 +75,6 @@ module DirtyPipeline
     def finish_transaction!
       clear! if running_transaction == @tx_id
     end
-
-   def running_transaction
-     DirtyPipeline.with_redis { |r| r.get(active_transaction_key) }
-   end
 
     def other_transaction_in_progress?
       return false if running_transaction.nil?

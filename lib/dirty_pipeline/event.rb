@@ -19,33 +19,20 @@ module DirtyPipeline
       )
     end
 
-    def self.load(json)
-      return unless json
-      new(JSON.load(json))
-    end
-
-    def self.dump(event)
-      JSON.dump(event.to_h)
-    end
-
-    def dump
-      self.class.dump(self)
-    end
-
     attr_reader :id, :tx_id, :error, :data
     def initialize(options = {}, data: nil,  error: nil)
       unless options.empty?
         options_hash = options.to_h
         data  ||= options_hash["data"]
         error ||= options_hash["error"]
-        transition = options_hash["transition"]
-        args       = options_hash["args"]
       end
 
       data_hash = data.to_h
 
-      @tx_id = data_hash.fetch("transaction_uuid")
-      @id = data_hash.fetch("uuid")
+      @tx_id     = data_hash.fetch("transaction_uuid")
+      @id        = data_hash.fetch("uuid")
+      transition = data_hash.fetch("transition")
+      args       = data_hash.fetch("args").to_a
       @data = {
         "uuid" => @id,
         "transaction_uuid" => @tx_id,
@@ -81,7 +68,7 @@ module DirtyPipeline
       @error = {
         "exception" => exception.class.to_s,
         "exception_message" => exception.message,
-        "created_at" => Time.current,
+        "created_at" => Time.now,
       }
       failure!
     end

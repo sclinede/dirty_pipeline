@@ -1,7 +1,7 @@
 module DirtyPipeline
   class Queue
     def initialize(operation, subject_class, subject_id, transaction_id)
-      @root = "dirty-pipeline-queue:#{subject.class}:#{subject.id}:" \
+      @root = "dirty-pipeline-queue:#{subject_class}:#{subject_id}:" \
               "op_#{operation}:txid_#{transaction_id}"
     end
 
@@ -13,16 +13,22 @@ module DirtyPipeline
     end
 
     def to_a
-      DirtyPipeline.with_redis { |r| r.lrange(events_queue_key, 0, -1) }
+      DirtyPipeline.with_redis do |r|
+        r.lrange(events_queue_key, 0, -1).map! do |packed_event|
+          unpack(packed_event)
+        end
+      end
     end
 
     def push(event)
       DirtyPipeline.with_redis { |r| r.rpush(events_queue_key, pack(event)) }
+      self
     end
     alias :<< :push
 
     def unshift(event)
       DirtyPipeline.with_redis { |r| r.lpush(events_queue_key, pack(event)) }
+      self
     end
 
     def pop
