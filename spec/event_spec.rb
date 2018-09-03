@@ -34,7 +34,7 @@ RSpec.describe DirtyPipeline::Event do
   end
 
   describe '#attempt_retry' do
-    before { event.attempt_retry }
+    before { event.attempt_retry! }
 
     it do
       expect(event.data.keys).to include(*%w(updated_at attempts_count))

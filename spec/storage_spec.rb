@@ -29,11 +29,11 @@ RSpec.describe DirtyPipeline::Storage do
 
   context 'when event was committed' do
     def event_data_from_db(mail_id, event_id)
-      DB[:mails].dig(mail_id, :events_store, "events", event.id)
+      DB[:mails].dig(mail_id, :events_store, "events", event_id)
     end
 
     def event_error_from_db(mail_id, event_id)
-      DB[:mails].dig(mail_id, :events_store, "errors", event.id)
+      DB[:mails].dig(mail_id, :events_store, "errors", event_id)
     end
 
     context 'when new event' do

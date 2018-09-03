@@ -1,11 +1,10 @@
 module DirtyPipeline
   class Transaction
-    attr_reader :locker, :storage, :subject, :pipeline, :queue, :event
-    def initialize(pipeline, queue, event)
+    attr_reader :locker, :storage, :subject, :pipeline, :event
+    def initialize(pipeline, event)
       @pipeline = pipeline
       @subject = pipeline.subject
       @storage = pipeline.storage
-      @queue = queue
       @event = event
     end
 
@@ -31,9 +30,7 @@ module DirtyPipeline
       storage.commit!(event)
 
       subject.transaction(requires_new: true) do
-        raise ActiveRecord::Rollback if catch(:abort_transaction) do
-          yield(destination, action, *event.args); nil
-        end
+        with_abort_handling { yield(destination, action, *event.args) }
       end
     rescue => exception
       event.link_exception(exception)
@@ -44,6 +41,12 @@ module DirtyPipeline
       raise
     ensure
       storage.commit!(event)
+    end
+
+    def with_abort_handling
+      return unless catch(:abort_transaction) { yield; nil }
+      event.abort! unless event.failure?
+      raise ActiveRecord::Rollback
     end
   end
 end

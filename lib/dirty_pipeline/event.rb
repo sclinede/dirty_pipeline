@@ -5,8 +5,9 @@ module DirtyPipeline
     NEW = "new".freeze
     START = "started".freeze
     FAILURE = "failed".freeze
+    ABORT = "aborted".freeze
     RETRY = "retry".freeze
-    SUCCESS = "success".freeze
+    SUCCESS = "succeeded".freeze
 
     def self.create(transition, *args, tx_id:)
       new(
@@ -54,7 +55,7 @@ module DirtyPipeline
       define_method("#{method_name}") { @data[method_name] }
     end
 
-    %w(new start retry failure).each do |method_name|
+    %w(new start retry failure success abort).each do |method_name|
       define_method("#{method_name}?") do
         @data["status"] == self.class.const_get(method_name.upcase)
       end
@@ -77,7 +78,7 @@ module DirtyPipeline
       @data["attempts_count"].to_i
     end
 
-    def attempt_retry
+    def attempt_retry!
       @data["updated_at"] = Time.now
       @data["attempts_count"] = attempts_count + 1
     end

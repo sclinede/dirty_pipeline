@@ -22,7 +22,8 @@ module DirtyPipeline
       using StringCamelcase
 
       def transition(name, from:, to:, action: nil, attempts: 1)
-        action ||= const_get(name.to_s.camelcase)
+        action ||= const_get(name.to_s.camelcase) rescue nil
+        action ||= method(name) if respond_to?(name)
         @transitions_map[name.to_s] = {
           action: action,
           from: Array(from).map(&:to_s),
@@ -166,7 +167,7 @@ module DirtyPipeline
     end
 
     def transaction(event)
-      Transaction.new(self, railway.queue, event)
+      Transaction.new(self, event)
     end
 
     def Failure(event, cause)
