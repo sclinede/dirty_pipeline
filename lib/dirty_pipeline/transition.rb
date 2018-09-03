@@ -1,11 +1,11 @@
 module DirtyPipeline
   class Transition
     def Abort()
-      throw :abort, true
+      throw :fail_operation, :abort
     end
 
     def Error(error)
-      throw :fail_with_error, error
+      throw :fail_operation, error
     end
 
     def Success(changes = nil)

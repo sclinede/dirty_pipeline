@@ -66,7 +66,7 @@ module DirtyPipeline
 
     def call
       return self if (serialized_event = railway.next).nil?
-      execute(load_event(serialized_event))
+      execute(load_event(serialized_event), :call)
     end
     alias :call_next :call
 
@@ -116,8 +116,8 @@ module DirtyPipeline
 
     private
 
-    def execute(event, type = :call)
-      transaction(event).public_send(type) do |destination, action, *args|
+    def execute(event, tx_method)
+      transaction(event).public_send(tx_method) do |destination, action, *args|
         state_changes = process_action(action, event, *args)
         next if status.failure?
         Success(event, state_changes, destination)
@@ -134,9 +134,7 @@ module DirtyPipeline
     def process_action(action, event, *args)
       return catch(:success) do
         return if interupt_on_error(event) do
-          return if interupt_on_abort(event) do
-            throw :success, run_operation(action, event, *args); nil
-          end
+          throw :success, run_operation(action, event, *args)
         end
         nil
       end
@@ -151,12 +149,8 @@ module DirtyPipeline
     end
 
     def interupt_on_error(event)
-      return if (fail_cause = catch(:fail_with_error) { yield; nil }).nil?
+      return unless (fail_cause = catch(:fail_operation) { yield; nil })
       Failure(event, fail_cause)
-    end
-
-    def interupt_on_abort(event)
-      Abort(event) if catch(:abort) { yield; nil }
     end
 
     def find_subject_args
@@ -172,20 +166,17 @@ module DirtyPipeline
     end
 
     def transaction(event)
-      ::DirtyPipeline::Transaction.new(self, railway.queue, event)
+      Transaction.new(self, railway.queue, event)
     end
 
     def Failure(event, cause)
       event.failure!
       railway.switch_to(:undo)
-      @status = Status.failure(cause, tag: :error)
-      throw :abort_transaction, true
-    end
-
-    def Abort(event)
-      event.failure!
-      railway.switch_to(:undo)
-      @status = Status.failure(subject, tag: :aborted)
+      if cause.eql?(:abort)
+        @status = Status.failure(subject, tag: :aborted)
+      else
+        @status = Status.failure(cause, tag: :error)
+      end
       throw :abort_transaction, true
     end
 
