@@ -1,6 +1,5 @@
 module DirtyPipeline
   class Queue
-    attr_reader :root
     def initialize(operation, subject_class, subject_id, transaction_id)
       @root = "dirty-pipeline-queue:#{subject.class}:#{subject.id}:" \
               "op_#{operation}:txid_#{transaction_id}"
@@ -26,14 +25,13 @@ module DirtyPipeline
       DirtyPipeline.with_redis { |r| r.lpush(events_queue_key, pack(event)) }
     end
 
-    def dequeue
+    def pop
       DirtyPipeline.with_redis do |r|
         data = r.lpop(events_queue_key)
         data.nil? ? r.del(active_event_key) : r.set(active_event_key, data)
-        return unpack(data)
+        unpack(data)
       end
     end
-    alias :pop :dequeue
 
     def processing_event
       DirtyPipeline.with_redis { |r| unpack(r.get(active_event_key)) }
@@ -64,11 +62,11 @@ module DirtyPipeline
     end
 
     def events_queue_key
-      "#{root}:events"
+      "#{@root}:events"
     end
 
     def active_event_key
-      "#{root}:active"
+      "#{@root}:active"
     end
   end
 end

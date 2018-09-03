@@ -9,13 +9,13 @@ module DirtyPipeline
       @event = event
     end
 
-    def retry
-      event.attempt_retry!
+    def call
+      event.start!
       with_transaction { |*targs| yield(*targs) }
     end
 
-    def call
-      event.start!
+    def retry
+      event.attempt_retry!
       with_transaction { |*targs| yield(*targs) }
     end
 
