@@ -22,14 +22,14 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   # temporary dependency
-  spec.add_runtime_dependency "sidekiq"
-  spec.add_runtime_dependency "redis"
-  spec.add_runtime_dependency "nanoid"
+  spec.add_runtime_dependency "sidekiq", "~> 5.0"
+  spec.add_runtime_dependency "redis", "~> 4.0"
+  spec.add_runtime_dependency "nanoid", "~> 0.2.0"
 
   spec.add_development_dependency "bundler", "~> 1.16"
   spec.add_development_dependency "rake", "~> 10.0"
   spec.add_development_dependency "rspec", "~> 3.0"
-  spec.add_development_dependency "dotenv"
-  spec.add_development_dependency "timecop"
-  spec.add_development_dependency "pry"
+  spec.add_development_dependency "dotenv", "~> 2.2"
+  spec.add_development_dependency "timecop", "~> 0.9"
+  spec.add_development_dependency "pry", "~> 0.11"
 end
