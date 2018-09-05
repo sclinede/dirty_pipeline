@@ -164,7 +164,6 @@ module DirtyPipeline
     end
 
     def Failure(event, cause, type:)
-      railway.switch_to(:undo)
       event.failure!
       @status = Status.failure(cause, tag: type)
     end
