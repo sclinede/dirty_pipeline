@@ -1,5 +1,5 @@
 require "dirty_pipeline/version"
-require "nanoid"
+require "securerandom"
 
 module DirtyPipeline
   require_relative "dirty_pipeline/ext/camelcase.rb"

@@ -12,7 +12,8 @@ module DirtyPipeline
     def self.create(transition, *args, tx_id:)
       new(
         data: {
-          "uuid" => Nanoid.generate,
+          # FIXME: SecureRandom
+          "uuid" => SecureRandom.uuid,
           "transaction_uuid" => tx_id,
           "transition" => transition,
           "args" => args,

@@ -9,18 +9,6 @@ module DirtyPipeline
     end
 
     def call
-      event.start!
-      with_transaction { |*targs| yield(*targs) }
-    end
-
-    def retry
-      event.attempt_retry!
-      with_transaction { |*targs| yield(*targs) }
-    end
-
-    private
-
-    def with_transaction
       pipeline.schedule_cleanup
 
       destination, action, max_attempts_count =
@@ -29,6 +17,7 @@ module DirtyPipeline
 
       storage.commit!(event)
 
+      # FIXME: make configurable, now - hardcoded to AR API
       subject.transaction(requires_new: true) do
         with_abort_handling { yield(destination, action, *event.args) }
       end
@@ -42,6 +31,8 @@ module DirtyPipeline
     ensure
       storage.commit!(event)
     end
+
+    private
 
     def with_abort_handling
       return unless catch(:abort_transaction) { yield; nil }

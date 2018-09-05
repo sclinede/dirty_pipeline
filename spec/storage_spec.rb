@@ -8,7 +8,7 @@ RSpec.describe DirtyPipeline::Storage do
   let(:event) do
     DirtyPipeline::Event.create("open", tx_id: transaction_id)
   end
-  let(:transaction_id) { Nanoid.generate }
+  let(:transaction_id) { SecureRandom.uuid }
 
   before do
     Timecop.freeze

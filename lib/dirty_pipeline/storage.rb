@@ -65,6 +65,7 @@ module DirtyPipeline
       (store.keys & %w(status events errors state)).size.eql?(4)
     end
 
+    # FIXME: save! - configurable method
     def save!
       subject.send("#{field}=", store)
       subject.save!

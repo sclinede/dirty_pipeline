@@ -4,7 +4,7 @@ RSpec.describe DirtyPipeline::Queue do
   subject(:queue) do
     described_class.new("call", "Mail", 13, transaction_id)
   end
-  let(:transaction_id) { Nanoid.generate }
+  let(:transaction_id) { SecureRandom.uuid }
   let(:event1) { DirtyPipeline::Event.create("open", tx_id: transaction_id) }
   let(:event2) { DirtyPipeline::Event.create("read", tx_id: transaction_id) }
 

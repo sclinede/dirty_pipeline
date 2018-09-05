@@ -1,3 +1,4 @@
+# FIXME: Abstract worker (see ActiveJob)
 require 'sidekiq'
 module DirtyPipeline
   class Worker
@@ -17,7 +18,7 @@ module DirtyPipeline
 
       case operation
       when "cleanup"
-        pipeline.clean
+        return pipeline.clean
       when "retry"
         return pipeline.retry
       end

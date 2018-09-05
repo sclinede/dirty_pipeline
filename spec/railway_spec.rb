@@ -5,7 +5,7 @@ RSpec.describe DirtyPipeline::Railway do
     described_class.new(mail, transaction_id)
   end
   let(:mail) { Mail.new.tap(&:save) }
-  let(:transaction_id) { Nanoid.generate }
+  let(:transaction_id) { SecureRandom.uuid }
   let(:event_read) do
     DirtyPipeline::Event.create("read", tx_id: transaction_id)
   end
