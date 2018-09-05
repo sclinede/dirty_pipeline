@@ -156,6 +156,7 @@ module DirtyPipeline
     def interupt_on_error(event)
       return unless (fail_cause = catch(:fail_transition) { yield; nil })
       Failure(event, fail_cause, type: :error)
+      throw :abort_transaction, true
     end
 
     def find_subject_args
@@ -166,7 +167,6 @@ module DirtyPipeline
       railway.switch_to(:undo)
       event.failure!
       @status = Status.failure(cause, tag: type)
-      throw :abort_transaction, true
     end
 
     def Success(event, changes, destination)
