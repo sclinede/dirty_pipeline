@@ -1,16 +1,16 @@
 module DirtyPipeline
   class Transition
     def Failure(error)
-      railway.switch_to(:undo)
+      railway&.switch_to(:undo)
       throw :fail_transition, error
     end
 
     def Success(changes = nil)
-      case railway.active
+      case railway&.active
       when "call"
-        railway.switch_to(:finalize) if respond_to?(:finalize)
+        railway&.switch_to(:finalize) if respond_to?(:finalize)
       when "finalize"
-        railway.switch_to(:call)
+        railway&.switch_to(:call)
       end
       throw :success, changes.to_h
     end
@@ -31,8 +31,8 @@ module DirtyPipeline
     def self.call(*args, **kwargs)
       event, pipeline, *args = args
       instance = new(event, pipeline.railway, *args, **kwargs)
-      pipeline.railway[:undo] << event
-      pipeline.railway[:finalize] << event
+      pipeline&.railway&.send(:[], :undo)&.send(:<<, event)
+      pipeline&.railway&.send(:[], :finalize)&.send(:<<, event)
       instance.call(pipeline.subject)
     end
 

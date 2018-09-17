@@ -85,7 +85,7 @@ module DirtyPipeline
       execute(load_event(enqueued_event), attempt_retry: true)
     end
 
-    def schedule(operation, delay = nil)
+    def schedule(operation = "call", delay = nil)
       job_args = {
         "transaction_id" => @uuid,
         "enqueued_pipeline" => self.class.to_s,
