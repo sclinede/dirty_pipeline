@@ -61,8 +61,9 @@ module DirtyPipeline
     end
 
     # FIXME operation :call - argument
-    def chain(*args, operation: :call)
-      railway[operation] << Event.create(*args, tx_id: @uuid)
+    def chain(*args, **kwargs)
+      operation = kwargs.fetch(:operation) { :call }
+      railway[operation] << Event.create(*args, **kwargs.merge(tx_id: @uuid))
       self
     end
 

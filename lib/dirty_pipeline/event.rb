@@ -9,7 +9,8 @@ module DirtyPipeline
     RETRY = "retry".freeze
     SUCCESS = "succeeded".freeze
 
-    def self.create(transition, *args, tx_id:)
+    def self.create(transition, *args, tx_id:, **kwargs)
+      args << kwargs unless kwargs.empty?
       new(
         data: {
           # FIXME: SecureRandom
