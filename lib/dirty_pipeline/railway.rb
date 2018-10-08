@@ -53,6 +53,11 @@ module DirtyPipeline
       DirtyPipeline.with_redis { |r| r.get(active_transaction_key) }
     end
 
+    def other_transaction_in_progress?
+      return false if running_transaction.nil?
+      running_transaction != @tx_id
+    end
+
     private
 
     def create_queue(operation_name)
@@ -74,11 +79,6 @@ module DirtyPipeline
 
     def finish_transaction!
       clear! if running_transaction == @tx_id
-    end
-
-    def other_transaction_in_progress?
-      return false if running_transaction.nil?
-      running_transaction != @tx_id
     end
   end
 end

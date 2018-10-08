@@ -11,6 +11,7 @@ module DirtyPipeline
     def call
       pipeline.schedule_cleanup
 
+      # Split attempts config and event dispatching
       destination, action, max_attempts_count =
         pipeline.find_transition(event.transition)
                 .values_at(:to, :action, :attempts)

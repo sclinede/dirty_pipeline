@@ -14,6 +14,7 @@ module DirtyPipeline
       end
       throw :success, changes.to_h
     end
+
     def self.finalize(*args, **kwargs)
       event, pipeline, *args = args
       instance = new(event, pipeline.railway, *args, **kwargs)

@@ -22,8 +22,8 @@ module DirtyPipeline
       using StringCamelcase
 
       def transition(name, from:, to:, action: nil, attempts: 1)
-        action ||= const_get(name.to_s.camelcase(:upper)) rescue nil
         action ||= method(name) if respond_to?(name)
+        action ||= const_get(name.to_s.camelcase(:upper))
         @transitions_map[name.to_s] = {
           action: action,
           from: Array(from).map(&:to_s),
@@ -61,12 +61,13 @@ module DirtyPipeline
     end
 
     # FIXME operation :call - argument
-    def chain(*args)
-      railway[:call] << Event.create(*args, tx_id: @uuid)
+    def chain(*args, operation: :call)
+      railway[operation] << Event.create(*args, tx_id: @uuid)
       self
     end
 
     def call
+      # HANDLE ANOTHER ACTION IN PROGRESS EXPLICITLY
       return self if (enqueued_event = railway.next).nil?
       execute(load_event(enqueued_event))
     end
@@ -106,6 +107,11 @@ module DirtyPipeline
     def retry_delay; self.class.retry_delay || DEFAULT_RETRY_DELAY; end
     def schedule_retry; schedule("retry",   retry_delay); end
 
+    def when_skipped
+      yield(nil, self) if railway.other_transaction_in_progress?
+      self
+    end
+
     def when_success
       yield(status.data, self) if status.success?
       self
@@ -118,10 +124,10 @@ module DirtyPipeline
 
     private
 
-
     def execute(event, attempt_retry: false)
       attempt_retry ? event.attempt_retry! : event.start!
 
+      # dispatch event?
       Transaction.new(self, event).call do |destination, action, *args|
         state_changes = process_action(action, event, *args)
         next if status.failure?
@@ -137,7 +143,7 @@ module DirtyPipeline
     end
 
     def process_action(action, event, *args)
-      return catch(:success) do
+      catch(:success) do
         return if interupt_on_error(event) do
           throw :success, run_operation(action, event, *args)
         end
@@ -149,6 +155,7 @@ module DirtyPipeline
     end
 
     def run_operation(action, event, *args)
+      raise ArgumentError unless action
       return unless action.respond_to?(operation = railway.active)
       action.public_send(operation, event, self, *args)
     end

@@ -20,7 +20,8 @@ end
 
 
 MAIL_ATTRIBUTES = %i(id title from to body events_store)
-class Mail < Struct.new(*MAIL_ATTRIBUTES)
+Mail = Struct.new(*MAIL_ATTRIBUTES)
+class Mail
   def self.find(id)
     new(DB[:mails].fetch(id).values_at(*MAIL_ATTRIBUTES))
   end
@@ -43,11 +44,6 @@ end
 class MailPipeline < DirtyPipeline::Base
   self.pipeline_storage = :events_store
 
-  transition :receive, from: nil,           to: :new
-  transition :open,    from: :new,          to: :read
-  transition :unread,  from: :read,         to: :new
-  transition :delete,  from: [:read, :new], to: :deleted
-
   def self.receive(mail)
     throw :success, {"received_at" => Time.now}
   end
@@ -60,7 +56,12 @@ class MailPipeline < DirtyPipeline::Base
     throw :success, {"read_at" => nil}
   end
 
-  def self.unread(mail)
+  def self.delete(mail)
     throw :success, {"deleted_at" => Time.now}
   end
+
+  transition :receive, from: nil,           to: :new
+  transition :open,    from: :new,          to: :read
+  transition :unread,  from: :read,         to: :new
+  transition :delete,  from: [:read, :new], to: :deleted
 end
