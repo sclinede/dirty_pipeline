@@ -39,6 +39,10 @@ module DirtyPipeline
         raise InvalidPipelineStorage, store unless valid_store?
       end
 
+      def with_postgres(&block)
+        DirtyPipeline.with_postgres(&block)
+      end
+
       def reset!
         reset
         save!
@@ -57,16 +61,14 @@ module DirtyPipeline
       def commit!(event)
         store["status"] = event.destination  if event.destination
         store["state"].merge!(event.changes) unless event.changes.to_h.empty?
-        DirtyPipeline.with_postgres do |c|
-          data, error = {}, {}
-          data = event.data.to_h if event.data.respond_to?(:to_h)
-          error = event.error.to_h if event.error.respond_to?(:to_h)
-          c.transaction do
-            c.exec(
-              SAVE_EVENT,
-              [event.id, subject_key, JSON.dump(data), JSON.dump(error)]
-            )
-          end
+        data, error = {}, {}
+        data = event.data.to_h if event.data.respond_to?(:to_h)
+        error = event.error.to_h if event.error.respond_to?(:to_h)
+        with_postgres do |c|
+          c.exec(
+            SAVE_EVENT,
+            [event.id, subject_key, JSON.dump(data), JSON.dump(error)]
+          )
         end
         save!
       end
@@ -76,7 +78,7 @@ module DirtyPipeline
         WHERE uuid = $1 AND context = $2;
       SQL
       def find_event(event_id)
-        DirtyPipeline.with_postgres do |c|
+        with_postgres do |c|
           found_event, found_error =
             PG.multi(c.exec(FIND_EVENT, [event_id, subject_key]))
           return unless found_event

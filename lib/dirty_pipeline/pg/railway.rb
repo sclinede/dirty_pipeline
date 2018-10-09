@@ -37,6 +37,10 @@ module DirtyPipeline
         ]
       end
 
+      def with_postgres(&block)
+        DirtyPipeline.with_postgres(&block)
+      end
+
       DELETE_OPERATION = <<~SQL
         DELETE FROM dp_active_operations WHERE key = $1;
       SQL
@@ -45,10 +49,10 @@ module DirtyPipeline
       SQL
       def clear!
         @queues.values.each(&:clear!)
-        DirtyPipeline.with_postgres do |c|
-          c.transaction do
-            c.exec DELETE_OPERATION, [active_operation_key]
-            c.exec DELETE_TRANSACTION, [active_transaction_key]
+        with_postgres do |c|
+          c.transaction do |tc|
+            tc.exec DELETE_OPERATION, [active_operation_key]
+            tc.exec DELETE_TRANSACTION, [active_transaction_key]
           end
         end
       end
@@ -76,10 +80,10 @@ module DirtyPipeline
         raise ArgumentError unless DEFAULT_OPERATIONS.include?(name.to_s)
         return if name.to_s == active
 
-        DirtyPipeline.with_postgres do |c|
-          c.transaction do
-            c.exec(SWITCH_OPERATION, [active_operation_key, name])
-          end
+        with_postgres do |c|
+          c.exec('START TRANSACTION;')
+          c.exec(SWITCH_OPERATION, [active_operation_key, name])
+          c.exec('COMMIT;')
         end
       end
 
@@ -87,7 +91,7 @@ module DirtyPipeline
         SELECT name FROM dp_active_operations WHERE key = $1;
       SQL
       def active
-        DirtyPipeline.with_postgres do |c|
+        with_postgres do |c|
           PG.single c.exec(SELECT_OPERATION, [active_operation_key])
         end
       end
@@ -97,7 +101,7 @@ module DirtyPipeline
         SELECT name FROM dp_active_transactions WHERE key = $1;
       SQL
       def running_transaction
-        DirtyPipeline.with_postgres do |c|
+        with_postgres do |c|
           PG.single c.exec(SELECT_TRANSACTION, [active_transaction_key])
         end
       end
@@ -128,10 +132,10 @@ module DirtyPipeline
       SQL
       def start_transaction!
         switch_to(DEFAULT_OPERATIONS.first) unless active
-        DirtyPipeline.with_postgres do |c|
-          c.transaction do
-            c.exec(SWITCH_TRANSACTION, [active_transaction_key, @tx_id])
-          end
+        with_postgres do |c|
+          c.exec('START TRANSACTION;')
+          c.exec(SWITCH_TRANSACTION, [active_transaction_key, @tx_id])
+          c.exec('COMMIT;')
         end
       end
 

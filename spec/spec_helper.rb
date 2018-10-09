@@ -29,9 +29,9 @@ RSpec.configure do |config|
     end
 
     def self.with_postgres
-      yield( connection = ::PG.connect(ENV["DATABASE_URL"]) )
+      yield(connection = ::PG.connect(ENV["DATABASE_URL"]))
     ensure
-      connection.finish
+      connection.close if connection
     end
 
     def self.redis

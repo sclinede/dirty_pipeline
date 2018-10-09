@@ -47,9 +47,9 @@ module DirtyPipeline
 
       def clear!
         with_postgres do |c|
-          c.transaction do
-            c.exec(DELETE_ACTIVE, [active_event_key])
-            c.exec(DELETE_EVENTS, [events_queue_key])
+          c.transaction do |tc|
+            tc.exec(DELETE_ACTIVE, [active_event_key])
+            tc.exec(DELETE_EVENTS, [events_queue_key])
           end
         end
       end
@@ -71,9 +71,7 @@ module DirtyPipeline
       SQL
       def push(event)
         with_postgres do |c|
-          c.transaction do
-            c.exec(PUSH_EVENT, [events_queue_key, pack(event)])
-          end
+          c.exec(PUSH_EVENT, [events_queue_key, pack(event)])
         end
 
         self
@@ -85,9 +83,7 @@ module DirtyPipeline
       SQL
       def unshift(event)
         with_postgres do |c|
-          c.transaction do
-            c.exec(UNSHIFT_EVENT, [events_queue_key, pack(event)])
-          end
+          c.exec(UNSHIFT_EVENT, [events_queue_key, pack(event)])
         end
         self
       end
@@ -109,14 +105,14 @@ module DirtyPipeline
       SQL
       def pop
         with_postgres do |c|
-          c.transaction do
+          c.transaction do |tc|
             event_id, raw_event =
-              PG.multi(c.exec(SELECT_LAST_EVENT, [events_queue_key]))
+              PG.multi(tc.exec(SELECT_LAST_EVENT, [events_queue_key]))
             if raw_event.nil?
-              c.exec(DELETE_ACTIVE_EVENT, [active_event_key])
+              tc.exec(DELETE_ACTIVE_EVENT, [active_event_key])
             else
-              c.exec(DELETE_EVENT, [events_queue_key, event_id])
-              c.exec(SET_EVENT_ACTIVE, [active_event_key, raw_event])
+              tc.exec(DELETE_EVENT, [events_queue_key, event_id])
+              tc.exec(SET_EVENT_ACTIVE, [active_event_key, raw_event])
             end
             unpack(raw_event)
           end

@@ -32,6 +32,14 @@ module DirtyPipeline
     fail NotImplementedError
   end
 
+  def self.with_postgres_transaction
+    with_postgres do |conn|
+      conn.transaction do |transaction_conn|
+        yield transaction_conn
+      end
+    end
+  end
+
   # def self.with_postgres
   #   yield(ActiveRecord::Base.connection.raw_connection)
   # ensure
