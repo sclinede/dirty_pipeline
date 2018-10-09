@@ -1,3 +1,5 @@
+require 'time'
+
 module DB
   module_function
   def current
@@ -45,11 +47,11 @@ class MailPipeline < DirtyPipeline::Base
   self.pipeline_storage = :events_store
 
   def self.receive(mail)
-    throw :success, {"received_at" => Time.now}
+    throw :success, {"received_at" => Time.now.utc.iso8601}
   end
 
   def self.open(mail)
-    throw :success, {"read_at" => Time.now}
+    throw :success, {"read_at" => Time.now.utc.iso8601}
   end
 
   def self.unread(mail)
@@ -57,7 +59,7 @@ class MailPipeline < DirtyPipeline::Base
   end
 
   def self.delete(mail)
-    throw :success, {"deleted_at" => Time.now}
+    throw :success, {"deleted_at" => Time.now.utc.iso8601}
   end
 
   transition :receive, from: nil,           to: :new

@@ -19,7 +19,8 @@ module DirtyPipeline
       storage.commit!(event)
 
       # FIXME: make configurable, now - hardcoded to AR API
-      subject.transaction(requires_new: true) do
+      # subject.transaction(requires_new: true) do
+      subject.transaction do
         with_abort_handling { yield(destination, action, *event.args) }
       end
     rescue => exception

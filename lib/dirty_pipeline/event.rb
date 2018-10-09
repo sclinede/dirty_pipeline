@@ -1,4 +1,5 @@
 require 'json'
+require 'time'
 
 module DirtyPipeline
   class Event
@@ -41,7 +42,7 @@ module DirtyPipeline
         "transaction_uuid" => @tx_id,
         "transition" => transition,
         "args" => args,
-        "created_at" => Time.now,
+        "created_at" => Time.now.utc.iso8601,
         "cache" => {},
         "attempts_count" => 1,
         "status" => NEW,
@@ -71,7 +72,7 @@ module DirtyPipeline
       @error = {
         "exception" => exception.class.to_s,
         "exception_message" => exception.message,
-        "created_at" => Time.now,
+        "created_at" => Time.now.utc.iso8601,
       }
       failure!
     end
@@ -81,7 +82,7 @@ module DirtyPipeline
     end
 
     def attempt_retry!
-      @data["updated_at"] = Time.now
+      @data["updated_at"] = Time.now.utc.iso8601
       @data["attempts_count"] = attempts_count + 1
     end
 
@@ -89,7 +90,7 @@ module DirtyPipeline
       @data.merge!(
         "destination" => destination,
         "changes" => changes,
-        "updated_at" => Time.now,
+        "updated_at" => Time.now.utc.iso8601,
         "status" => SUCCESS,
       )
     end

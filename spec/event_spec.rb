@@ -8,7 +8,7 @@ RSpec.describe DirtyPipeline::Event do
 
   before do
     Timecop.freeze
-    @time_at_start = Time.now
+    @time_at_start = Time.now.utc.iso8601
   end
   after { Timecop.return }
 

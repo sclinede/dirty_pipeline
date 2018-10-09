@@ -3,10 +3,11 @@ require 'spec_helper'
 RSpec.describe DirtyPipeline::Transaction do
   let(:mail) { Mail.new.tap(&:save) }
   let(:pipeline) { MailPipeline.new(mail) }
+  let(:storage) { pipeline.storage }
 
   before do
     Timecop.freeze
-    @time_at_start = Time.now
+    @time_at_start = Time.now.utc.iso8601
   end
   after do
     pipeline.railway.next # finish transaction
@@ -24,11 +25,11 @@ RSpec.describe DirtyPipeline::Transaction do
   end
 
   def event_data(mail_id, event_id)
-    DB[:mails].dig(mail_id, :events_store, "events", event_id)
+    storage.find_event(event_id).data
   end
 
   def event_error(mail_id, event_id)
-    DB[:mails].dig(mail_id, :events_store, "errors", event_id)
+    storage.find_event(event_id).error
   end
 
   context 'when default transaction' do
@@ -37,16 +38,16 @@ RSpec.describe DirtyPipeline::Transaction do
         pipeline.chain('receive')
         @event = pipeline.railway.next
         described_class.new(pipeline, @event).call do |destination, *args|
-          @event.complete({"received_at" => Time.now}, destination)
+          @event.complete({"received_at" => Time.now.utc.iso8601}, destination)
         end
       end
 
       it do
         expect(status(mail.id)).to eq "new"
-        expect(state(mail.id)).to match("received_at" => Time.now)
+        expect(state(mail.id)).to match("received_at" => Time.now.utc.iso8601)
         expect(@event).to be_success
         expect(event_data(mail.id, @event.id)).to eq(@event.data)
-        expect(event_error(mail.id, @event.id)).to eq(@event.error)
+        expect(event_error(mail.id, @event.id)).to eq(@event.error.to_h)
       end
     end
 
@@ -64,7 +65,7 @@ RSpec.describe DirtyPipeline::Transaction do
         expect(state(mail.id)).to be_empty
         expect(@event).to be_abort
         expect(event_data(mail.id, @event.id)).to eq(@event.data)
-        expect(event_error(mail.id, @event.id)).to be_nil
+        expect(event_error(mail.id, @event.id)).to be_empty
       end
     end
 

@@ -18,11 +18,9 @@ RSpec.describe DirtyPipeline::Storage do
 
   context 'when storage is pristine' do
     it do
-      expect(storage.to_h).to match(
+      expect(storage.to_h).to include(
         "status" => nil,
         "state" => {},
-        "events" => {},
-        "errors" => {}
       )
     end
   end
@@ -42,25 +40,23 @@ RSpec.describe DirtyPipeline::Storage do
 
         expect(storage.status).to be_nil
         expect(storage.to_h["state"]).to be_empty
-        expect(storage.to_h["errors"]).to be_empty
-        expect(storage.to_h.dig("events", event.id)).to eq(event.data)
-        expect(event_error_from_db(mail.id, event.id)).to eq(event.error)
-        expect(event_data_from_db(mail.id, event.id)).to eq(event.data)
+        expect(storage.find_event(event.id).data).to eq(event.data)
+        expect(storage.find_event(event.id).error).to be_empty
       end
     end
 
     context 'when finished event' do
-      before { event.complete({"read_at" => Time.now}, "open") }
+      before { event.complete({"read_at" => Time.now.utc.iso8601}, "open") }
 
       it do
         storage.commit!(event)
 
         expect(storage.status).to eq("open")
-        expect(storage.to_h["state"]).to match("read_at" => Time.now)
-        expect(storage.to_h["errors"]).to be_empty
-        expect(storage.to_h.dig("events", event.id)).to eq(event.data)
-        expect(event_error_from_db(mail.id, event.id)).to eq(event.error)
-        expect(event_data_from_db(mail.id, event.id)).to eq(event.data)
+        expect(storage.to_h["state"]).to(
+          match("read_at" => Time.now.utc.iso8601)
+        )
+        expect(storage.find_event(event.id).data).to eq(event.data)
+        expect(storage.find_event(event.id).error).to be_empty
       end
     end
 
@@ -78,10 +74,8 @@ RSpec.describe DirtyPipeline::Storage do
 
         expect(storage.status).to be_nil
         expect(storage.to_h["state"]).to be_empty
-        expect(storage.to_h.dig("errors", event.id)).to eq(event.error)
-        expect(storage.to_h.dig("events", event.id)).to eq(event.data)
-        expect(event_error_from_db(mail.id, event.id)).to eq(event.error)
-        expect(event_data_from_db(mail.id, event.id)).to eq(event.data)
+        expect(storage.find_event(event.id).error).to eq(event.error)
+        expect(storage.find_event(event.id).data).to eq(event.data)
       end
     end
   end

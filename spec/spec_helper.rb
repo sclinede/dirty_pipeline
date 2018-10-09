@@ -3,6 +3,7 @@ require "dirty_pipeline"
 
 require "dotenv"
 Dotenv.load(".env.test")
+require "pg"
 require "timecop"
 
 require_relative "./support/infrastructure"
@@ -21,12 +22,29 @@ RSpec.configure do |config|
   config.before(:each) { DB.reset! }
 
   module DirtyPipeline
+    if ENV["WITH_PG"]
+      Queue = PG::Queue
+      Storage = PG::Storage
+      Railway = PG::Railway
+    end
+
+    def self.with_postgres
+      yield( connection = ::PG.connect(ENV["DATABASE_URL"]) )
+    ensure
+      connection.finish
+    end
+
     def self.redis
-      Thread.current[:dirty_redis] ||= Redis.new(redis_url: ENV["REDIS_URL"])
+      Thread.current[:dirty_redis] ||= ::Redis.new(redis_url: ENV["REDIS_URL"])
     end
 
     def self.with_redis
       yield(redis)
     end
+  end
+
+  DirtyPipeline.with_postgres do |c|
+    DirtyPipeline.destroy!(c)
+    DirtyPipeline.create!(c)
   end
 end
