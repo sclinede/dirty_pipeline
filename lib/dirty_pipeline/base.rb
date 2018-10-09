@@ -131,8 +131,9 @@ module DirtyPipeline
       # dispatch event?
       Transaction.new(self, event).call do |destination, action, *args|
         state_changes = process_action(action, event, *args)
+        event.assign_changes(state_changes)
         next if status.failure?
-        Success(event, state_changes, destination)
+        Success(event, destination)
       end
       call_next
 
@@ -176,8 +177,8 @@ module DirtyPipeline
       @status = Status.failure(cause, tag: type)
     end
 
-    def Success(event, changes, destination)
-      event.complete(changes, destination)
+    def Success(event, destination)
+      event.complete(destination)
       @status = Status.success(subject)
     end
   end

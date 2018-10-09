@@ -86,10 +86,13 @@ module DirtyPipeline
       @data["attempts_count"] = attempts_count + 1
     end
 
-    def complete(changes, destination)
+    def assign_changes(changes)
+      @data["changes"] = changes
+    end
+
+    def complete(destination)
       @data.merge!(
         "destination" => destination,
-        "changes" => changes,
         "updated_at" => Time.now.utc.iso8601,
         "status" => SUCCESS,
       )

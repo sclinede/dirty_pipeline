@@ -81,9 +81,9 @@ module DirtyPipeline
         return if name.to_s == active
 
         with_postgres do |c|
-          c.exec('START TRANSACTION;')
+          # c.exec('START TRANSACTION;')
           c.exec(SWITCH_OPERATION, [active_operation_key, name])
-          c.exec('COMMIT;')
+          # c.exec('COMMIT;')
         end
       end
 
@@ -133,9 +133,9 @@ module DirtyPipeline
       def start_transaction!
         switch_to(DEFAULT_OPERATIONS.first) unless active
         with_postgres do |c|
-          c.exec('START TRANSACTION;')
+          # c.exec('START TRANSACTION;')
           c.exec(SWITCH_TRANSACTION, [active_transaction_key, @tx_id])
-          c.exec('COMMIT;')
+          # c.exec('COMMIT;')
         end
       end
 

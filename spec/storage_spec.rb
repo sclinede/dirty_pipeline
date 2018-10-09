@@ -46,7 +46,10 @@ RSpec.describe DirtyPipeline::Storage do
     end
 
     context 'when finished event' do
-      before { event.complete({"read_at" => Time.now.utc.iso8601}, "open") }
+      before do
+        event.assign_changes({"read_at" => Time.now.utc.iso8601})
+        event.complete("open")
+      end
 
       it do
         storage.commit!(event)

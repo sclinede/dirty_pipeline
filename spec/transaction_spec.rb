@@ -38,7 +38,8 @@ RSpec.describe DirtyPipeline::Transaction do
         pipeline.chain('receive')
         @event = pipeline.railway.next
         described_class.new(pipeline, @event).call do |destination, *args|
-          @event.complete({"received_at" => Time.now.utc.iso8601}, destination)
+          @event.assign_changes({"received_at" => Time.now.utc.iso8601})
+          @event.complete(destination)
         end
       end
 
