@@ -48,7 +48,7 @@ module DirtyPipeline
       end
 
       def commit!(event)
-        store["status"] = event.destination     if event.destination
+        store["status"] = event.destination     if event.success?
         store["state"].merge!(event.changes)    unless event.changes.to_h.empty?
 
         error = {}

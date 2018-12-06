@@ -52,6 +52,8 @@ module DirtyPipeline
           "txid" => event.tx_id,
           "transit" => event.transition,
           "args" => event.args,
+          "source" => event.source,
+          "destination" => event.destination,
         )
       end
 
@@ -64,6 +66,8 @@ module DirtyPipeline
             "transaction_uuid" => unpacked_event["txid"],
             "transition" => unpacked_event["transit"],
             "args" => unpacked_event["args"],
+            "source" => unpacked_event["source"],
+            "destination" => unpacked_event["destination"]
           }
         )
       end

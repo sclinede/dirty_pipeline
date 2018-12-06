@@ -42,12 +42,16 @@ module DirtyPipeline
       @status = Status.success(subject)
     end
 
-    def find_transition(name)
-      self.class.transitions_map.fetch(name.to_s).tap do |from:, **kwargs|
-        next unless railway.operation.eql?(:call)
-        next if from == Array(storage.status)
-        next if from.include?(storage.status.to_s)
-        raise InvalidTransition, "from `#{storage.status}` by `#{name}`"
+    def find_transition!(event)
+      tname = event.transition
+      event.source = storage.status
+      self.class.transitions_map.fetch(tname.to_s).tap do |from:, **kwargs|
+        next unless railway.operation.eql?("call")
+        next if from == Array(event.source)
+        next if from.include?(event.source.to_s)
+        raise InvalidTransition, "from `#{event.source}` by `#{tname}`"
+      end.tap do |to:, **|
+        event.destination = to if railway.operation.eql?("call")
       end
     end
 
@@ -128,12 +132,14 @@ module DirtyPipeline
     def execute(event, attempt_retry: false)
       attempt_retry ? event.attempt_retry! : event.start!
 
-      # dispatch event?
-      Transaction.new(self, event).call do |destination, action, *args|
+      Transaction.new(self, event).call do |action, *args|
         state_changes = process_action(action, event, *args)
+
         event.assign_changes(state_changes)
+        event.complete if event.start?
+
         next if status.failure?
-        Success(event, destination)
+        Success(event)
       end
       call_next
 
@@ -177,8 +183,7 @@ module DirtyPipeline
       @status = Status.failure(cause, tag: type)
     end
 
-    def Success(event, destination)
-      event.complete(destination)
+    def Success(event)
       @status = Status.success(subject)
     end
   end

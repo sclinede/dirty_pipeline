@@ -35,11 +35,11 @@ RSpec.describe DirtyPipeline::Transaction do
   context 'when default transaction' do
     context 'when successful transaction' do
       before do
-        pipeline.chain('receive')
+        pipeline.chain('Receive')
         @event = pipeline.railway.next
         described_class.new(pipeline, @event).call do |destination, *args|
           @event.assign_changes({"received_at" => Time.now.utc.iso8601})
-          @event.complete(destination)
+          @event.complete
         end
       end
 
@@ -54,7 +54,7 @@ RSpec.describe DirtyPipeline::Transaction do
 
     context 'when transaction aborted' do
       before do
-        pipeline.chain('receive')
+        pipeline.chain('Receive')
         @event = pipeline.railway.next
         described_class.new(pipeline, @event).call do
           throw :abort_transaction, true
@@ -72,7 +72,7 @@ RSpec.describe DirtyPipeline::Transaction do
 
     context 'when exception raised' do
       before do
-        pipeline.chain('receive')
+        pipeline.chain('Receive')
         @event = pipeline.railway.next
         begin
           described_class.new(pipeline, @event).call do

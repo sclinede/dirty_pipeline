@@ -12,16 +12,15 @@ module DirtyPipeline
       pipeline.schedule_cleanup
 
       # Split attempts config and event dispatching
-      destination, action, max_attempts_count =
-        pipeline.find_transition(event.transition)
-                .values_at(:to, :action, :attempts)
+      action, max_attempts_count =
+        pipeline.find_transition!(event).values_at(:action, :attempts)
 
       storage.commit!(event)
 
       # FIXME: make configurable, now - hardcoded to AR API
       # subject.transaction(requires_new: true) do
       subject.transaction do
-        with_abort_handling { yield(destination, action, *event.args) }
+        with_abort_handling { yield(action, *event.args) }
       end
     rescue => exception
       event.link_exception(exception)

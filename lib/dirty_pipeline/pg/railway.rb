@@ -1,7 +1,7 @@
 module DirtyPipeline
   module PG
     class Railway
-      DEFAULT_OPERATIONS = %w(call undo finalize)
+      DEFAULT_OPERATIONS = %w(call undo finalize finalize_undo)
 
       def self.create!(connection)
         connection.exec <<~SQL

@@ -23,6 +23,15 @@ module DirtyPipeline
       )
     end
 
+    def dup
+      self.class.new(
+        data: data.merge(
+          "uuid" => SecureRandom.uuid,
+          "status" => NEW,
+        )
+      )
+    end
+
     attr_reader :id, :tx_id, :error, :data
     def initialize(options = {}, data: nil,  error: nil)
       unless options.empty?
@@ -52,6 +61,22 @@ module DirtyPipeline
 
     def to_h
       {data: @data, error: @error}
+    end
+
+    def source
+      data["source"]
+    end
+
+    def source=(value)
+      data["source"] = value
+    end
+
+    def destination
+      data["destination"]
+    end
+
+    def destination=(value)
+      data["destination"] = value
     end
 
     %w(args transition cache destination changes).each do |method_name|
@@ -90,9 +115,8 @@ module DirtyPipeline
       @data["changes"] = changes
     end
 
-    def complete(destination)
+    def complete
       @data.merge!(
-        "destination" => destination,
         "updated_at" => Time.now.utc.iso8601,
         "status" => SUCCESS,
       )

@@ -59,7 +59,7 @@ module DirtyPipeline
         DO UPDATE SET data = EXCLUDED.data, error = EXCLUDED.error;
       SQL
       def commit!(event)
-        store["status"] = event.destination  if event.destination
+        store["status"] = event.destination  if event.success?
         store["state"].merge!(event.changes) unless event.changes.to_h.empty?
         data, error = {}, {}
         data = event.data.to_h if event.data.respond_to?(:to_h)

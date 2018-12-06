@@ -48,7 +48,8 @@ RSpec.describe DirtyPipeline::Storage do
     context 'when finished event' do
       before do
         event.assign_changes({"read_at" => Time.now.utc.iso8601})
-        event.complete("open")
+        event.destination = "open"
+        event.complete
       end
 
       it do
