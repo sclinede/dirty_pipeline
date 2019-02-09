@@ -17,7 +17,8 @@ module DirtyPipeline
           transitions_map || Hash.new
         )
       end
-      attr_accessor :pipeline_storage, :retry_delay, :cleanup_delay
+      attr_accessor :pipeline_storage, :retry_delay, :cleanup_delay,
+                    :background_queue
 
       using StringCamelcase
 
@@ -42,8 +43,16 @@ module DirtyPipeline
       @status = Status.success(subject)
     end
 
-    def find_transition!(event)
-      tname = event.transition
+    def could?(tname)
+      transition = self.class.transitions_map[tname]
+      return false unless transition
+      from = transition[:from]
+      from = [from] unless from.respond_to?(:to_ary)
+      from.include?(storage.status.to_s)
+    end
+
+    def find_transition!(event, tname: nil)
+      tname ||= event.transition
       event.source = storage.status
       self.class.transitions_map.fetch(tname.to_s).tap do |from:, **kwargs|
         next unless railway.operation.eql?("call")
@@ -100,9 +109,13 @@ module DirtyPipeline
       }
 
       if delay.nil?
-        ::DirtyPipeline::Worker.perform_async(job_args)
+        ::DirtyPipeline::Worker
+          .set(queue: self.background_queue)
+          .perform_async(job_args)
       else
-        ::DirtyPipeline::Worker.perform_in(delay, job_args)
+        ::DirtyPipeline::Worker
+          .set(queue: self.background_queue)
+          .perform_in(delay, job_args)
       end
     end
 
