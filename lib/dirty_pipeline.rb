@@ -1,5 +1,6 @@
 require "dirty_pipeline/version"
 require "securerandom"
+require "dry-initializer"
 
 module DirtyPipeline
   require_relative "dirty_pipeline/ext/camelcase.rb"

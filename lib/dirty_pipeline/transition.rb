@@ -7,21 +7,22 @@ module DirtyPipeline
 
     param :event
     param :railway
+    param :storage
 
     class << self
-      attr_accessor :policies
+      attr_reader :policies
       def inherited(klass)
-        klass.policies = Hash.new
+        klass.instance_variable_set(:@policies, Hash.new)
       end
 
       def policy(policy_settings)
         policy_settings.each_pair do |policy_name, policy_klass|
-          self.policies.store(policy_name, policy_klass)
+          policies.store(policy_name, policy_klass)
         end
       end
 
       def define_error(key)
-        [CustomError.new(self.name, key)]
+        [CustomError.new(name, key)]
       end
     end
 
@@ -58,32 +59,43 @@ module DirtyPipeline
       throw :success, changes.to_h
     end
 
-    def self.finalize_undo(*args, **kwargs)
+    def self.build_transition(*args, **kwargs)
       event, pipeline, *args = args
-      instance = new(event, pipeline.railway, *args, **kwargs)
+      [
+        event,
+        pipeline,
+        new(
+          event,
+          pipeline.railway,
+          pipeline.class.pipeline_storage,
+          *args,
+          **kwargs
+        )
+      ]
+    end
+
+    def self.finalize_undo(*args, **kwargs)
+      _, pipeline, instance = build_transition(*args, **kwargs)
       return unless instance.respond_to?(:finalize_undo)
       instance.finalize_undo(pipeline.subject)
     end
 
     def self.finalize(*args, **kwargs)
-      event, pipeline, *args = args
-      instance = new(event, pipeline.railway, *args, **kwargs)
+      _, pipeline, instance = build_transition(*args, **kwargs)
       return unless instance.respond_to?(:finalize)
       instance.finalize(pipeline.subject)
     end
 
     def self.undo(*args, **kwargs)
-      event, pipeline, *args = args
-      instance = new(event, pipeline.railway, *args, **kwargs)
-      pipeline&.railway&.send(:[], :finalize_undo)&.send(:<<, event)
+      event, pipeline, instance = build_transition(*args, **kwargs)
+      pipeline&.railway&.send(:[], :finalize_undo)&.send(:<<, event) if instance.respond_to?(:finalize_undo)
       return unless instance.respond_to?(:undo)
       instance.undo(pipeline.subject)
     end
 
     def self.call(*args, **kwargs)
-      event, pipeline, *args = args
-      instance = new(event, pipeline.railway, *args, **kwargs)
-      pipeline&.railway&.send(:[], :finalize)&.send(:<<, event)
+      event, pipeline, instance = build_transition(*args, **kwargs)
+      pipeline&.railway&.send(:[], :finalize)&.send(:<<, event) if instance.respond_to?(:finalize)
       prepare_undo(pipeline, event)
       instance.call(pipeline.subject)
     end
@@ -100,12 +112,12 @@ module DirtyPipeline
     end
 
     def state(subject)
-      subject.send(pipeline.pipeline_storage)["state"].to_h
+      subject.send(storage)["state"].to_h
     end
 
     def validate!(policies_list)
       policies_list.each_pair do |policy_name, args|
-        policy_klass = self.policies.fetch(policy_name)
+        policy_klass = self.class.policies.fetch(policy_name)
         args = [args] unless args.respond_to?(:to_ary)
         policy = policy_klass.new(*args)
         Failure(policy.errors) if policy.invalid?

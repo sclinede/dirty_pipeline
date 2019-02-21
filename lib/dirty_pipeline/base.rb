@@ -44,6 +44,7 @@ module DirtyPipeline
     end
 
     def could?(tname)
+      return true if railway.active.to_s != "call"
       transition = self.class.transitions_map[tname]
       return false unless transition
       from = transition[:from]
@@ -83,6 +84,7 @@ module DirtyPipeline
     def call
       # HANDLE ANOTHER ACTION IN PROGRESS EXPLICITLY
       return self if (enqueued_event = railway.next).nil?
+      return self unless could?(enqueued_event.transition)
       execute(load_event(enqueued_event))
     end
     alias :call_next :call
@@ -110,11 +112,11 @@ module DirtyPipeline
 
       if delay.nil?
         ::DirtyPipeline::Worker
-          .set(queue: self.background_queue)
+          .set(queue: self.class.background_queue || :default)
           .perform_async(job_args)
       else
         ::DirtyPipeline::Worker
-          .set(queue: self.background_queue)
+          .set(queue: self.class.background_queue || :default)
           .perform_in(delay, job_args)
       end
     end
