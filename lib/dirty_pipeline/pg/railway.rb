@@ -58,10 +58,13 @@ module DirtyPipeline
       end
 
       def next
-        return if other_transaction_in_progress?
+        # TODO: verify logic here, maybe use advisory lock right here
+        # with_advisory_lock(active_transaction_key) do
+        # return if other_transaction_in_progress?
         start_transaction! unless running_transaction
 
         queue.pop.tap { |event| finish_transaction! if event.nil? }
+        # end
       end
 
       def queue(operation_name = active)

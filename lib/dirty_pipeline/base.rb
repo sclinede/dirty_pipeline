@@ -82,12 +82,8 @@ module DirtyPipeline
     end
 
     def call
-      # HANDLE ANOTHER ACTION IN PROGRESS EXPLICITLY
-      return self if (enqueued_event = railway.next).nil?
-      return self unless could?(enqueued_event.transition)
-      execute(load_event(enqueued_event))
+      with_subject_lock { call_next }
     end
-    alias :call_next :call
 
     def clean
       finished = railway.queue.to_a.empty?
@@ -143,6 +139,20 @@ module DirtyPipeline
     end
 
     private
+
+    # just an interface, implement later
+    def with_subject_lock
+      fail NotImplementedError
+    end
+
+    def call_next
+      return self if (enqueued_event = railway.next).nil?
+      unless could?(enqueued_event.transition)
+        reset!
+        return self
+      end
+      execute(load_event(enqueued_event))
+    end
 
     def execute(event, attempt_retry: false)
       attempt_retry ? event.attempt_retry! : event.start!

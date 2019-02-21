@@ -18,10 +18,11 @@ module DirtyPipeline
       storage.commit!(event)
 
       # FIXME: make configurable, now - hardcoded to AR API
+      # also, make sure, that we need transaction here
       # subject.transaction(requires_new: true) do
-      subject.transaction do
+      # subject.transaction do
         with_abort_handling { yield(action, *event.args) }
-      end
+      # end
     rescue => exception
       event.link_exception(exception)
       if max_attempts_count.to_i > event.attempts_count
@@ -38,7 +39,8 @@ module DirtyPipeline
     def with_abort_handling
       return unless catch(:abort_transaction) { yield; nil }
       event.abort! unless event.abort?
-      raise ActiveRecord::Rollback
+      # temporary turned off, due to question about transaction
+      # raise ActiveRecord::Rollback
     end
   end
 end
