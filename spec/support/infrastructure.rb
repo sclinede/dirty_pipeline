@@ -47,6 +47,15 @@ end
 
 class MailPipeline < DirtyPipeline::Base
   self.pipeline_storage = :events_store
+  class << self
+    def mutex
+      Thread.current[:mail_mutex] ||= Mutex.new
+    end
+  end
+
+  def with_subject_lock
+    self.class.mutex.synchronize { yield }
+  end
 
   class Receive < DirtyPipeline::Transition
     def call(mail)
@@ -78,7 +87,7 @@ class MailPipeline < DirtyPipeline::Base
     throw :success, {"deleted_at" => Time.now.utc.iso8601}
   end
 
-  transition :Receive, from: nil,           to: :new
+  transition :Receive, from: [nil],           to: :new
   transition :Open,    from: :new,          to: :read
   transition :Unread,  from: :read,         to: :new
   transition :Delete,  from: [:read, :new], to: :deleted

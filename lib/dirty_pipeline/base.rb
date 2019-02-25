@@ -13,8 +13,7 @@ module DirtyPipeline
       attr_reader :transitions_map
       def inherited(child)
         child.instance_variable_set(
-          :@transitions_map,
-          transitions_map || Hash.new
+          :@transitions_map, transitions_map.to_h.dup
         )
       end
       attr_accessor :pipeline_storage, :retry_delay, :cleanup_delay,
