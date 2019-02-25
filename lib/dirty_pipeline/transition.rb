@@ -6,8 +6,8 @@ module DirtyPipeline
     extend Dry::Initializer
 
     param :event
-    param :railway
-    param :storage
+    param :railway, optional: true
+    param :storage, optional: true
 
     class << self
       attr_reader :policies
@@ -62,8 +62,7 @@ module DirtyPipeline
     def self.build_transition(*args, **kwargs)
       event, pipeline, *args = args
       [
-        event,
-        pipeline,
+        pipeline.subject,
         new(
           event,
           pipeline.railway,
@@ -75,36 +74,49 @@ module DirtyPipeline
     end
 
     def self.finalize_undo(*args, **kwargs)
-      _, pipeline, instance = build_transition(*args, **kwargs)
+      subject, instance = build_transition(*args, **kwargs)
       return unless instance.respond_to?(:finalize_undo)
-      instance.finalize_undo(pipeline.subject)
+      instance.finalize_undo(subject)
     end
 
     def self.finalize(*args, **kwargs)
-      _, pipeline, instance = build_transition(*args, **kwargs)
+      subject, instance = build_transition(*args, **kwargs)
       return unless instance.respond_to?(:finalize)
-      instance.finalize(pipeline.subject)
+      instance.finalize(subject)
     end
 
     def self.undo(*args, **kwargs)
-      event, pipeline, instance = build_transition(*args, **kwargs)
-      pipeline&.railway&.send(:[], :finalize_undo)&.send(:<<, event) if instance.respond_to?(:finalize_undo)
+      subject, instance = build_transition(*args, **kwargs)
       return unless instance.respond_to?(:undo)
-      instance.undo(pipeline.subject)
+      instance.chain_finalize_undo
+      instance.undo(subject)
     end
 
     def self.call(*args, **kwargs)
-      event, pipeline, instance = build_transition(*args, **kwargs)
-      pipeline&.railway&.send(:[], :finalize)&.send(:<<, event) if instance.respond_to?(:finalize)
-      prepare_undo(pipeline, event)
-      instance.call(pipeline.subject)
+      subject, instance = build_transition(*args, **kwargs)
+      instance.chain_finalize
+      instance.chain_undo
+      instance.call(subject)
     end
 
-    def self.prepare_undo(pipeline, event)
+    def chain_finalize
+      return unless event
+      return unless respond_to?(:finalize)
+      railway&.send(:[], :finalize)&.send(:<<, event)
+    end
+
+    def chain_finalize_undo
+      return unless event
+      return unless respond_to?(:finalize_undo)
+      railway&.send(:[], :finalize_undo)&.send(:<<, event)
+    end
+
+    def chain_undo
+      return unless event
       anti_event = event.dup
       anti_event.source, anti_event.destination =
         event.destination, event.source
-      pipeline&.railway&.send(:[], :undo)&.send(:unshift, anti_event)
+      railway&.send(:[], :undo)&.send(:unshift, anti_event)
     end
 
     def cache(key)
