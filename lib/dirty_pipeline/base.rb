@@ -147,6 +147,7 @@ module DirtyPipeline
     def call_next
       return self if (enqueued_event = railway.next).nil?
       unless could?(enqueued_event.transition)
+        return call_next if enqueued_event.try_next?
         reset!
         return self
       end

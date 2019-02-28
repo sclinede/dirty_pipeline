@@ -54,6 +54,7 @@ RSpec.describe DirtyPipeline::Event do
           "cache" => {},
           "attempts_count" => 1,
           "status" => "new",
+          "try_next" => false,
         },
         error: nil
       )

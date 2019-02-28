@@ -60,7 +60,7 @@ module DirtyPipeline
       def to_a
         with_postgres do |c|
           c.exec(SELECT_ALL_EVENTS, [events_queue_key]).to_a.map! do |row|
-            unpack(row.values.first)
+            Event.unpack(row.values.first)
           end
         end
       end
@@ -71,7 +71,7 @@ module DirtyPipeline
       SQL
       def push(event)
         with_postgres do |c|
-          c.exec(PUSH_EVENT, [events_queue_key, pack(event)])
+          c.exec(PUSH_EVENT, [events_queue_key, event.to_json])
         end
 
         self
@@ -83,7 +83,7 @@ module DirtyPipeline
       SQL
       def unshift(event)
         with_postgres do |c|
-          c.exec(UNSHIFT_EVENT, [events_queue_key, pack(event)])
+          c.exec(UNSHIFT_EVENT, [events_queue_key, event.to_json])
         end
         self
       end
@@ -114,7 +114,7 @@ module DirtyPipeline
               tc.exec(DELETE_EVENT, [events_queue_key, event_id])
               tc.exec(SET_EVENT_ACTIVE, [active_event_key, raw_event])
             end
-            unpack(raw_event)
+            Event.unpack(raw_event)
           end
         end
       end
@@ -127,37 +127,11 @@ module DirtyPipeline
           raw_event = PG.single(
             c.exec(SELECT_ACTIVE_EVENT, [active_event_key])
           )
-          unpack(raw_event)
+          Event.unpack(raw_event)
         end
       end
 
       private
-
-      def pack(event)
-        JSON.dump(
-          "evid" => event.id,
-          "txid" => event.tx_id,
-          "transit" => event.transition,
-          "args" => event.args,
-          "source" => event.source,
-          "destination" => event.destination
-        )
-      end
-
-      def unpack(packed_event)
-        return unless packed_event
-        unpacked_event = JSON.load(packed_event)
-        Event.new(
-          data: {
-            "uuid" => unpacked_event["evid"],
-            "transaction_uuid" => unpacked_event["txid"],
-            "transition" => unpacked_event["transit"],
-            "args" => unpacked_event["args"],
-            "source" => unpacked_event["source"],
-            "destination" => unpacked_event["destination"]
-          }
-        )
-      end
 
       def events_queue_key
         "#{@root}:events"

@@ -10,7 +10,24 @@ module DirtyPipeline
     RETRY = "retry".freeze
     SUCCESS = "succeeded".freeze
 
-    def self.create(transition, *args, tx_id:, **kwargs)
+    def self.unpack(packed_event)
+      return unless packed_event
+      unpacked_event = JSON.load(packed_event)
+
+      Event.new(
+        data: {
+          "uuid" => unpacked_event["evid"],
+          "transaction_uuid" => unpacked_event["txid"],
+          "transition" => unpacked_event["transit"],
+          "args" => unpacked_event["args"],
+          "source" => unpacked_event["source"],
+          "destination" => unpacked_event["destination"],
+          "try_next" => unpacked_event["try_next"],
+        }
+      )
+    end
+
+    def self.create(transition, *args, tx_id:, try_next: false, **kwargs)
       args << kwargs unless kwargs.empty?
       new(
         data: {
@@ -19,6 +36,7 @@ module DirtyPipeline
           "transaction_uuid" => tx_id,
           "transition" => transition,
           "args" => args,
+          "try_next" => try_next
         }
       )
     end
@@ -29,6 +47,18 @@ module DirtyPipeline
           "uuid" => SecureRandom.uuid,
           "status" => NEW,
         )
+      )
+    end
+
+    def to_json
+      JSON.dump(
+        "evid" => id,
+        "txid" => tx_id,
+        "transit" => transition,
+        "args" => args,
+        "source" => source,
+        "destination" => destination,
+        "try_next" => try_next?
       )
     end
 
@@ -77,6 +107,10 @@ module DirtyPipeline
 
     def destination=(value)
       data["destination"] = value
+    end
+
+    def try_next?
+      @data["try_next"]
     end
 
     %w(args transition cache destination changes).each do |method_name|
