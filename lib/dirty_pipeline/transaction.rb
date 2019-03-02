@@ -28,6 +28,8 @@ module DirtyPipeline
       if max_attempts_count.to_i > event.attempts_count
         event.retry!
         pipeline.schedule_retry
+      else
+        pipeline.reset!
       end
       raise
     ensure

@@ -6,8 +6,8 @@ module DirtyPipeline
     extend Dry::Initializer
 
     param :event
-    param :railway, optional: true
-    param :storage, optional: true
+    option :railway, optional: true
+    option :storage, optional: true
 
     class << self
       attr_reader :policies
@@ -24,6 +24,16 @@ module DirtyPipeline
       def define_error(key)
         [CustomError.new(name, key)]
       end
+
+      def define_state_reader(name, path: nil)
+        path ||= name
+        path = [path] unless path.respond_to?(:to_ary)
+        path.map!(&:to_s)
+        define_method(name) do
+          fail unless defined? @binded_state
+          @binded_state.().dig(*path)
+        end
+      end
     end
 
     CustomError = Struct.new(:class_name, :message_key, :field)
@@ -38,7 +48,6 @@ module DirtyPipeline
         [:pipelines, class_name.underscore]
       end
     end
-
 
     def Failure(error)
       railway&.switch_to(:undo)
@@ -62,41 +71,45 @@ module DirtyPipeline
     def self.build_transition(*args, **kwargs)
       event, pipeline, *args = args
       [
-        pipeline.subject,
         new(
           event,
-          pipeline.railway,
-          pipeline.class.pipeline_storage,
           *args,
+          railway: pipeline.railway,
+          storage: pipeline.class.pipeline_storage,
           **kwargs
-        )
+        ).tap { |instance| instance.bind_state!(pipeline.subject) },
+        pipeline.subject,
       ]
     end
 
     def self.finalize_undo(*args, **kwargs)
-      subject, instance = build_transition(*args, **kwargs)
+      instance, subject = build_transition(*args, **kwargs)
       return unless instance.respond_to?(:finalize_undo)
       instance.finalize_undo(subject)
+      instance.Success()
     end
 
     def self.finalize(*args, **kwargs)
-      subject, instance = build_transition(*args, **kwargs)
+      instance, subject = build_transition(*args, **kwargs)
       return unless instance.respond_to?(:finalize)
       instance.finalize(subject)
+      instance.Success()
     end
 
     def self.undo(*args, **kwargs)
-      subject, instance = build_transition(*args, **kwargs)
+      instance, subject = build_transition(*args, **kwargs)
       return unless instance.respond_to?(:undo)
       instance.chain_finalize_undo
       instance.undo(subject)
+      instance.Success()
     end
 
     def self.call(*args, **kwargs)
-      subject, instance = build_transition(*args, **kwargs)
+      instance, subject = build_transition(*args, **kwargs)
       instance.chain_finalize
       instance.chain_undo
       instance.call(subject)
+      instance.Success()
     end
 
     def chain_finalize
@@ -121,6 +134,10 @@ module DirtyPipeline
 
     def cache(key)
       event.cache.fetch(key) { event.cache[key] = yield }
+    end
+
+    def bind_state!(subject)
+      @binded_state = -> { subject.send(storage)["state"].to_h }
     end
 
     def state(subject)
