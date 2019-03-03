@@ -17,8 +17,8 @@ RSpec.describe DirtyPipeline::Base do
                             .call
                             .status
       expect(status).to be_success
-      expect(mail.events_store["status"]).to eq("deleted")
-      expect(mail.events_store["state"]).to match(
+      expect(mail.tasks_store["status"]).to eq("deleted")
+      expect(mail.tasks_store["state"]).to match(
         "received_at" => Time.now.utc.iso8601,
         "read_at" => nil, # after the Unread
         "deleted_at" => Time.now.utc.iso8601
@@ -43,8 +43,8 @@ RSpec.describe DirtyPipeline::Base do
                             .call
                             .status
       expect(status).to be_failure
-      expect(mail.events_store["status"]).to be_nil
-      expect(mail.events_store["state"]).to match(
+      expect(mail.tasks_store["status"]).to be_nil
+      expect(mail.tasks_store["state"]).to match(
         "received_at" => nil,
         "read_at" => nil,
       )
@@ -67,8 +67,8 @@ RSpec.describe DirtyPipeline::Base do
                             .call
                             .status
       expect(status).to be_failure
-      expect(mail.events_store["status"]).to be_nil
-      expect(mail.events_store["state"]).to match(
+      expect(mail.tasks_store["status"]).to be_nil
+      expect(mail.tasks_store["state"]).to match(
         "received_at" => nil,
       )
     end

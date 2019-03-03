@@ -7,7 +7,7 @@ module DirtyPipeline
   require_relative "dirty_pipeline/status.rb"
   require_relative "dirty_pipeline/worker.rb"
   require_relative "dirty_pipeline/transaction.rb"
-  require_relative "dirty_pipeline/event.rb"
+  require_relative "dirty_pipeline/task.rb"
 
   # Redis
   require_relative "dirty_pipeline/redis/railway.rb"

@@ -6,14 +6,14 @@ module DirtyPipeline
   #     field: "value",
   #   },
   #   errors: {
-  #     "<event_id>": {
+  #     "<task_id>": {
   #       error: "RuPost::API::Error",
   #       error_message: "Timeout error",
   #       created_at: 2018-01-01T13:22Z
   #     },
   #   },
-  #   events: {
-  #     <event_id>: {
+  #   tasks: {
+  #     <task_id>: {
   #       transition: "Create",
   #       args: ...,
   #       changes: ...,
@@ -21,7 +21,7 @@ module DirtyPipeline
   #       updated_at: ...,
   #       attempts_count: 2,
   #     },
-  #     <event_id>: {...},
+  #     <task_id>: {...},
   #   }
   # }
   module Redis
@@ -47,29 +47,29 @@ module DirtyPipeline
         store["status"]
       end
 
-      def commit!(event)
-        store["status"] = event.destination     if event.success?
-        store["state"].merge!(event.changes)    unless event.changes.to_h.empty?
+      def commit!(task)
+        store["status"] = task.destination     if task.success?
+        store["state"].merge!(task.changes)    unless task.changes.to_h.empty?
 
         error = {}
-        error = event.error.to_h unless event.error.to_h.empty?
-        store["errors"][event.id] = error
+        error = task.error.to_h unless task.error.to_h.empty?
+        store["errors"][task.id] = error
 
         data = {}
-        data = event.data.to_h unless event.data.to_h.empty?
-        store["events"][event.id] = data
+        data = task.data.to_h unless task.data.to_h.empty?
+        store["tasks"][task.id] = data
         save!
       end
 
-      def find_event(event_id)
-        return unless (found_event = store.dig("events", event_id))
-        Event.new(data: found_event, error: store.dig("errors", event_id))
+      def find_task(task_id)
+        return unless (found_task = store.dig("tasks", task_id))
+        Task.new(data: found_task, error: store.dig("errors", task_id))
       end
 
       private
 
       def valid_store?
-        (store.keys & %w(status events errors state)).size.eql?(4)
+        (store.keys & %w(status tasks errors state)).size.eql?(4)
       end
 
       # FIXME: save! - configurable method
@@ -84,7 +84,7 @@ module DirtyPipeline
           {
             "status" => nil,
             "state" => {},
-            "events" => {},
+            "tasks" => {},
             "errors" => {}
           }
         )

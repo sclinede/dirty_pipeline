@@ -19,7 +19,7 @@ module ActiveRecord
   class Rollback < StandardError; end
 end
 
-MAIL_ATTRIBUTES = %i(id title from to body events_store)
+MAIL_ATTRIBUTES = %i(id title from to body tasks_store)
 Mail = Struct.new(*MAIL_ATTRIBUTES)
 class Mail
   def self.find(id)
@@ -46,7 +46,7 @@ class Mail
 end
 
 class MailPipeline < DirtyPipeline::Base
-  self.pipeline_storage = :events_store
+  self.pipeline_storage = :tasks_store
   class << self
     def mutex
       Thread.current[:mail_mutex] ||= Mutex.new

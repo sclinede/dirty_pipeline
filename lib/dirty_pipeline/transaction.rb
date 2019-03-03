@@ -1,46 +1,44 @@
 module DirtyPipeline
   class Transaction
-    attr_reader :locker, :storage, :subject, :pipeline, :event
-    def initialize(pipeline, event)
+    attr_reader :locker, :storage, :subject, :pipeline, :task
+    def initialize(pipeline, task)
       @pipeline = pipeline
       @subject = pipeline.subject
       @storage = pipeline.storage
-      @event = event
+      @task = task
     end
 
     def call
       pipeline.schedule_cleanup
 
-      # Split attempts config and event dispatching
+      # Split attempts config and action dispatching
       action, max_attempts_count =
-        pipeline.find_transition!(event).values_at(:action, :attempts)
+        pipeline.find_transition!(task).values_at(:action, :attempts)
 
-      storage.commit!(event)
+      storage.commit!(task)
 
-      # FIXME: make configurable, now - hardcoded to AR API
-      # also, make sure, that we need transaction here
-      # subject.transaction(requires_new: true) do
+      # make sure, that we need transaction here
       # subject.transaction do
-        with_abort_handling { yield(action, *event.args) }
+      with_abort_handling { yield(action, *task.args) }
       # end
     rescue => exception
-      event.link_exception(exception)
-      if max_attempts_count.to_i > event.attempts_count
-        event.retry!
+      task.link_exception(exception)
+      if max_attempts_count.to_i > task.attempts_count
+        task.retry!
         pipeline.schedule_retry
       else
         pipeline.reset!
       end
       raise
     ensure
-      storage.commit!(event)
+      storage.commit!(task)
     end
 
     private
 
     def with_abort_handling
       return unless catch(:abort_transaction) { yield; nil }
-      event.abort! unless event.abort?
+      task.abort! unless task.abort?
       # temporary turned off, due to question about transaction
       # raise ActiveRecord::Rollback
     end

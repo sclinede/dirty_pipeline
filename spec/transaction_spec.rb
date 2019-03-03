@@ -13,50 +13,50 @@ RSpec.describe DirtyPipeline::Transaction do
     pipeline.railway.next # finish transaction
     Timecop.return
     @time_at_start = nil
-    @event = nil
+    @task = nil
   end
 
   def status(mail_id)
-    DB[:mails].dig(mail_id, :events_store, "status")
+    DB[:mails].dig(mail_id, :tasks_store, "status")
   end
 
   def state(mail_id)
-    DB[:mails].dig(mail_id, :events_store, "state")
+    DB[:mails].dig(mail_id, :tasks_store, "state")
   end
 
-  def event_data(mail_id, event_id)
-    storage.find_event(event_id).data
+  def task_data(mail_id, task_id)
+    storage.find_task(task_id).data
   end
 
-  def event_error(mail_id, event_id)
-    storage.find_event(event_id).error
+  def task_error(mail_id, task_id)
+    storage.find_task(task_id).error
   end
 
   context 'when default transaction' do
     context 'when successful transaction' do
       before do
         pipeline.chain('Receive')
-        @event = pipeline.railway.next
-        described_class.new(pipeline, @event).call do |destination, *args|
-          @event.assign_changes({"received_at" => Time.now.utc.iso8601})
-          @event.complete
+        @task = pipeline.railway.next
+        described_class.new(pipeline, @task).call do |destination, *args|
+          @task.assign_changes({"received_at" => Time.now.utc.iso8601})
+          @task.complete
         end
       end
 
       it do
         expect(status(mail.id)).to eq "new"
         expect(state(mail.id)).to match("received_at" => Time.now.utc.iso8601)
-        expect(@event).to be_success
-        expect(event_data(mail.id, @event.id)).to eq(@event.data)
-        expect(event_error(mail.id, @event.id)).to eq(@event.error.to_h)
+        expect(@task).to be_success
+        expect(task_data(mail.id, @task.id)).to eq(@task.data)
+        expect(task_error(mail.id, @task.id)).to eq(@task.error.to_h)
       end
     end
 
     context 'when transaction aborted' do
       before do
         pipeline.chain('Receive')
-        @event = pipeline.railway.next
-        described_class.new(pipeline, @event).call do
+        @task = pipeline.railway.next
+        described_class.new(pipeline, @task).call do
           throw :abort_transaction, true
         end
       end
@@ -64,18 +64,18 @@ RSpec.describe DirtyPipeline::Transaction do
       it do
         expect(status(mail.id)).to be_nil
         expect(state(mail.id)).to be_empty
-        expect(@event).to be_abort
-        expect(event_data(mail.id, @event.id)).to eq(@event.data)
-        expect(event_error(mail.id, @event.id)).to be_empty
+        expect(@task).to be_abort
+        expect(task_data(mail.id, @task.id)).to eq(@task.data)
+        expect(task_error(mail.id, @task.id)).to be_empty
       end
     end
 
     context 'when exception raised' do
       before do
         pipeline.chain('Receive')
-        @event = pipeline.railway.next
+        @task = pipeline.railway.next
         begin
-          described_class.new(pipeline, @event).call do
+          described_class.new(pipeline, @task).call do
             raise "No. This never happens"
           end
         rescue => ex
@@ -86,14 +86,14 @@ RSpec.describe DirtyPipeline::Transaction do
       it do
         expect(status(mail.id)).to be_nil
         expect(state(mail.id)).to be_empty
-        expect(@event).to be_failure
-        expect(@event.error).to match(
+        expect(@task).to be_failure
+        expect(@task.error).to match(
           "exception" => @rescued_exception.class.to_s,
           "exception_message" => @rescued_exception.message,
           "created_at" => @time_at_start,
         )
-        expect(event_data(mail.id, @event.id)).to eq(@event.data)
-        expect(event_error(mail.id, @event.id)).to eq(@event.error)
+        expect(task_data(mail.id, @task.id)).to eq(@task.data)
+        expect(task_error(mail.id, @task.id)).to eq(@task.error)
       end
     end
   end

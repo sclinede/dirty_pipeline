@@ -2,11 +2,11 @@ require 'spec_helper'
 
 RSpec.describe DirtyPipeline::Storage do
   subject(:storage) do
-    described_class.new(mail, :events_store)
+    described_class.new(mail, :tasks_store)
   end
   let(:mail) { Mail.new.tap(&:save) }
-  let(:event) do
-    DirtyPipeline::Event.create("open", tx_id: transaction_id)
+  let(:task) do
+    DirtyPipeline::Task.create("open", tx_id: transaction_id)
   end
   let(:transaction_id) { SecureRandom.uuid }
 
@@ -25,61 +25,61 @@ RSpec.describe DirtyPipeline::Storage do
     end
   end
 
-  context 'when event was committed' do
-    def event_data_from_db(mail_id, event_id)
-      DB[:mails].dig(mail_id, :events_store, "events", event_id)
+  context 'when task was committed' do
+    def task_data_from_db(mail_id, task_id)
+      DB[:mails].dig(mail_id, :tasks_store, "tasks", task_id)
     end
 
-    def event_error_from_db(mail_id, event_id)
-      DB[:mails].dig(mail_id, :events_store, "errors", event_id)
+    def task_error_from_db(mail_id, task_id)
+      DB[:mails].dig(mail_id, :tasks_store, "errors", task_id)
     end
 
-    context 'when new event' do
+    context 'when new task' do
       it do
-        storage.commit!(event)
+        storage.commit!(task)
 
         expect(storage.status).to be_nil
         expect(storage.to_h["state"]).to be_empty
-        expect(storage.find_event(event.id).data).to eq(event.data)
-        expect(storage.find_event(event.id).error).to be_empty
+        expect(storage.find_task(task.id).data).to eq(task.data)
+        expect(storage.find_task(task.id).error).to be_empty
       end
     end
 
-    context 'when finished event' do
+    context 'when finished task' do
       before do
-        event.assign_changes({"read_at" => Time.now.utc.iso8601})
-        event.destination = "open"
-        event.complete
+        task.assign_changes({"read_at" => Time.now.utc.iso8601})
+        task.destination = "open"
+        task.complete
       end
 
       it do
-        storage.commit!(event)
+        storage.commit!(task)
 
         expect(storage.status).to eq("open")
         expect(storage.to_h["state"]).to(
           match("read_at" => Time.now.utc.iso8601)
         )
-        expect(storage.find_event(event.id).data).to eq(event.data)
-        expect(storage.find_event(event.id).error).to be_empty
+        expect(storage.find_task(task.id).data).to eq(task.data)
+        expect(storage.find_task(task.id).error).to be_empty
       end
     end
 
-    context 'when failed event' do
+    context 'when failed task' do
       before do
         begin
           raise TestError, "Something bad happened"
         rescue => ex
-          event.link_exception(ex)
+          task.link_exception(ex)
         end
       end
 
       it do
-        storage.commit!(event)
+        storage.commit!(task)
 
         expect(storage.status).to be_nil
         expect(storage.to_h["state"]).to be_empty
-        expect(storage.find_event(event.id).error).to eq(event.error)
-        expect(storage.find_event(event.id).data).to eq(event.data)
+        expect(storage.find_task(task.id).error).to eq(task.error)
+        expect(storage.find_task(task.id).data).to eq(task.data)
       end
     end
   end

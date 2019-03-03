@@ -51,16 +51,16 @@ module DirtyPipeline
       from.include?(storage.status.to_s)
     end
 
-    def find_transition!(event, tname: nil)
-      tname ||= event.transition
-      event.source = storage.status
+    def find_transition!(task, tname: nil)
+      tname ||= task.transition
+      task.source = storage.status
       self.class.transitions_map.fetch(tname.to_s).tap do |from:, **kwargs|
         next unless railway.operation.eql?("call")
-        next if from == Array(event.source)
-        next if from.include?(event.source.to_s)
-        raise InvalidTransition, "from `#{event.source}` by `#{tname}`"
+        next if from == Array(task.source)
+        next if from.include?(task.source.to_s)
+        raise InvalidTransition, "from `#{task.source}` by `#{tname}`"
       end.tap do |to:, **|
-        event.destination = to if railway.operation.eql?("call")
+        task.destination = to if railway.operation.eql?("call")
       end
     end
 
@@ -76,7 +76,7 @@ module DirtyPipeline
     # FIXME operation :call - argument
     def chain(*args, **kwargs)
       operation = kwargs.fetch(:operation) { :call }
-      railway[operation] << Event.create(*args, **kwargs.merge(tx_id: @uuid))
+      railway[operation] << Task.create(*args, **kwargs.merge(tx_id: @uuid))
       self
     end
 
@@ -86,15 +86,15 @@ module DirtyPipeline
 
     def clean
       finished = railway.queue.to_a.empty?
-      finished &&= railway.queue.processing_event.nil?
+      finished &&= railway.queue.processing_task.nil?
       return self if finished
       railway.switch_to(:undo)
       call
     end
 
     def retry
-      return self if (enqueued_event = railway.queue.processing_event).nil?
-      execute(load_event(enqueued_event), attempt_retry: true)
+      return self if (enqueued_task = railway.queue.processing_task).nil?
+      execute(load_task(enqueued_task), attempt_retry: true)
     end
 
     def schedule(operation = "call", delay = nil)
@@ -145,57 +145,57 @@ module DirtyPipeline
     end
 
     def call_next
-      return self if (enqueued_event = railway.next).nil?
-      unless could?(enqueued_event.transition)
-        return call_next if enqueued_event.try_next?
+      return self if (enqueued_task = railway.next).nil?
+      unless could?(enqueued_task.transition)
+        return call_next if enqueued_task.try_next?
         reset!
         return self
       end
-      execute(load_event(enqueued_event))
+      execute(load_task(enqueued_task))
     end
 
-    def execute(event, attempt_retry: false)
-      attempt_retry ? event.attempt_retry! : event.start!
+    def execute(task, attempt_retry: false)
+      attempt_retry ? task.attempt_retry! : task.start!
 
-      Transaction.new(self, event).call do |action, *args|
-        state_changes = process_action(action, event, *args)
+      Transaction.new(self, task).call do |action, *args|
+        state_changes = process_action(action, task, *args)
 
-        event.assign_changes(state_changes)
-        event.complete if event.start?
+        task.assign_changes(state_changes)
+        task.complete if task.start?
 
         next if status.failure?
-        Success(event)
+        Success(task)
       end
       call_next
 
       self
     end
 
-    def load_event(enqueued_event)
-      storage.find_event(enqueued_event.id) || enqueued_event
+    def load_task(enqueued_task)
+      storage.find_task(enqueued_task.id) || enqueued_task
     end
 
-    def process_action(action, event, *args)
+    def process_action(action, task, *args)
       catch(:success) do
-        return if interupt_on_error(event) do
-          throw :success, run_operation(action, event, *args)
+        return if interupt_on_error(task) do
+          throw :success, run_operation(action, task, *args)
         end
         nil
       end
     rescue => exception
-      Failure(event, exception, type: :exception)
+      Failure(task, exception, type: :exception)
       raise
     end
 
-    def run_operation(action, event, *args)
+    def run_operation(action, task, *args)
       raise ArgumentError unless action
       return unless action.respond_to?(operation = railway.active)
-      action.public_send(operation, event, self, *args)
+      action.public_send(operation, task, self, *args)
     end
 
-    def interupt_on_error(event)
+    def interupt_on_error(task)
       return unless (fail_cause = catch(:fail_transition) { yield; nil })
-      Failure(event, fail_cause, type: :error)
+      Failure(task, fail_cause, type: :error)
       throw :abort_transaction, true
     end
 
@@ -203,12 +203,12 @@ module DirtyPipeline
       subject.id
     end
 
-    def Failure(event, cause, type:)
-      event.failure!
+    def Failure(task, cause, type:)
+      task.failure!
       @status = Status.failure(cause, tag: type)
     end
 
-    def Success(event)
+    def Success(task)
       @status = Status.success(subject)
     end
   end

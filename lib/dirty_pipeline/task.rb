@@ -2,7 +2,7 @@ require 'json'
 require 'time'
 
 module DirtyPipeline
-  class Event
+  class Task
     NEW = "new".freeze
     START = "started".freeze
     FAILURE = "failed".freeze
@@ -10,19 +10,19 @@ module DirtyPipeline
     RETRY = "retry".freeze
     SUCCESS = "succeeded".freeze
 
-    def self.unpack(packed_event)
-      return unless packed_event
-      unpacked_event = JSON.load(packed_event)
+    def self.unpack(packed)
+      return unless packed
+      unpacked = JSON.load(packed)
 
-      Event.new(
+      Task.new(
         data: {
-          "uuid" => unpacked_event["evid"],
-          "transaction_uuid" => unpacked_event["txid"],
-          "transition" => unpacked_event["transit"],
-          "args" => unpacked_event["args"],
-          "source" => unpacked_event["source"],
-          "destination" => unpacked_event["destination"],
-          "try_next" => unpacked_event["try_next"],
+          "uuid" => unpacked["taskid"],
+          "transaction_uuid" => unpacked["txid"],
+          "transition" => unpacked["transit"],
+          "args" => unpacked["args"],
+          "source" => unpacked["source"],
+          "destination" => unpacked["destination"],
+          "try_next" => unpacked["try_next"],
         }
       )
     end
@@ -52,7 +52,7 @@ module DirtyPipeline
 
     def to_json
       JSON.dump(
-        "evid" => id,
+        "taskid" => id,
         "txid" => tx_id,
         "transit" => transition,
         "args" => args,

@@ -1,7 +1,7 @@
 require 'spec_helper'
 
-RSpec.describe DirtyPipeline::Event do
-  subject(:event) do
+RSpec.describe DirtyPipeline::Task do
+  subject(:task) do
     described_class.create('open', tx_id: transaction_id)
   end
   let(:transaction_id) { SecureRandom.uuid }
@@ -19,34 +19,34 @@ RSpec.describe DirtyPipeline::Event do
       begin
         raise TestError, "Something bad happened"
       rescue => ex
-        event.link_exception(ex)
+        task.link_exception(ex)
       end
     end
 
     it do
-      expect(event.error).to match(
+      expect(task.error).to match(
         "exception" => "TestError",
         "exception_message" => "Something bad happened",
         "created_at" => @time_at_start,
       )
-      expect(event).to be_failure
+      expect(task).to be_failure
     end
   end
 
   describe '#attempt_retry' do
-    before { event.attempt_retry! }
+    before { task.attempt_retry! }
 
     it do
-      expect(event.data.keys).to include(*%w(updated_at attempts_count))
-      expect(event.attempts_count).to eq(2)
+      expect(task.data.keys).to include(*%w(updated_at attempts_count))
+      expect(task.attempts_count).to eq(2)
     end
   end
 
   describe '#to_h' do
     it do
-      expect(event.to_h).to match(
+      expect(task.to_h).to match(
         data: {
-          "uuid" => event.id,
+          "uuid" => task.id,
           "transaction_uuid" => transaction_id,
           "transition" => 'open',
           "args" => [],

@@ -12,7 +12,8 @@ module DirtyPipeline
 
       def self.create!(connection)
         connection.exec <<~SQL
-          CREATE TABLE dp_events_store (
+          ALTER TABLE IF EXISTS dp_events_store RENAME TO dp_tasks_store;
+          CREATE TABLE IF NOT EXISTS dp_tasks_store (
             uuid TEXT CONSTRAINT primary_active_operations_key PRIMARY KEY,
             context TEXT NOT NULL,
             data TEXT,
@@ -24,7 +25,7 @@ module DirtyPipeline
 
       def self.destroy!(connection)
         connection.exec <<~SQL
-          DROP TABLE IF EXISTS dp_events_store;
+          DROP TABLE IF EXISTS dp_tasks_store;
         SQL
       end
 
@@ -52,38 +53,38 @@ module DirtyPipeline
         store["status"]
       end
 
-      SAVE_EVENT = <<~SQL
-        INSERT INTO dp_events_store (uuid, context, data, error)
+      SAVE_TASK = <<~SQL
+        INSERT INTO dp_tasks_store (uuid, context, data, error)
         VALUES ($1, $2, $3, $4)
         ON CONFLICT (uuid)
         DO UPDATE SET data = EXCLUDED.data, error = EXCLUDED.error;
       SQL
-      def commit!(event)
-        store["status"] = event.destination  if event.success?
-        store["state"].merge!(event.changes) unless event.changes.to_h.empty?
+      def commit!(task)
+        store["status"] = task.destination  if task.success?
+        store["state"].merge!(task.changes) unless task.changes.to_h.empty?
         data, error = {}, {}
-        data = event.data.to_h if event.data.respond_to?(:to_h)
-        error = event.error.to_h if event.error.respond_to?(:to_h)
+        data = task.data.to_h if task.data.respond_to?(:to_h)
+        error = task.error.to_h if task.error.respond_to?(:to_h)
         with_postgres do |c|
           c.exec(
-            SAVE_EVENT,
-            [event.id, subject_key, JSON.dump(data), JSON.dump(error)]
+            SAVE_TASK,
+            [task.id, subject_key, JSON.dump(data), JSON.dump(error)]
           )
         end
         save!
       end
 
-      FIND_EVENT = <<-SQL
-        SELECT data, error FROM dp_events_store
+      FIND_TASK = <<-SQL
+        SELECT data, error FROM dp_tasks_store
         WHERE uuid = $1 AND context = $2;
       SQL
-      def find_event(event_id)
+      def find_task(task_id)
         with_postgres do |c|
-          found_event, found_error =
-            PG.multi(c.exec(FIND_EVENT, [event_id, subject_key]))
-          return unless found_event
-          Event.new(
-            data: JSON.parse(found_event), error: JSON.parse(found_error)
+          found_task, found_error =
+            PG.multi(c.exec(FIND_TASK, [task_id, subject_key]))
+          return unless found_task
+          Task.new(
+            data: JSON.parse(found_task), error: JSON.parse(found_error)
           )
         end
       end

@@ -29,7 +29,7 @@ module DirtyPipeline
         return if other_transaction_in_progress?
         start_transaction! unless running_transaction
 
-        queue.pop.tap { |event| finish_transaction! if event.nil? }
+        queue.pop.tap { |task| finish_transaction! if task.nil? }
       end
 
       def queue(operation_name = active)

@@ -5,7 +5,7 @@ module DirtyPipeline
   class Transition
     extend Dry::Initializer
 
-    param :event
+    param :task
     option :railway, optional: true
     option :storage, optional: true
 
@@ -69,10 +69,10 @@ module DirtyPipeline
     end
 
     def self.build_transition(*args, **kwargs)
-      event, pipeline, *args = args
+      task, pipeline, *args = args
       [
         new(
-          event,
+          task,
           *args,
           railway: pipeline.railway,
           storage: pipeline.class.pipeline_storage,
@@ -113,27 +113,27 @@ module DirtyPipeline
     end
 
     def chain_finalize
-      return unless event
+      return unless task
       return unless respond_to?(:finalize)
-      railway&.send(:[], :finalize)&.send(:<<, event)
+      railway&.send(:[], :finalize)&.send(:<<, task)
     end
 
     def chain_finalize_undo
-      return unless event
+      return unless task
       return unless respond_to?(:finalize_undo)
-      railway&.send(:[], :finalize_undo)&.send(:<<, event)
+      railway&.send(:[], :finalize_undo)&.send(:<<, task)
     end
 
     def chain_undo
-      return unless event
-      anti_event = event.dup
-      anti_event.source, anti_event.destination =
-        event.destination, event.source
-      railway&.send(:[], :undo)&.send(:unshift, anti_event)
+      return unless task
+      anti_task = task.dup
+      anti_task.source, anti_task.destination =
+        task.destination, task.source
+      railway&.send(:[], :undo)&.send(:unshift, anti_task)
     end
 
     def cache(key)
-      event.cache.fetch(key) { event.cache[key] = yield }
+      task.cache.fetch(key) { task.cache[key] = yield }
     end
 
     def bind_state!(subject)
