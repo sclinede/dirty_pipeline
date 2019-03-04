@@ -82,6 +82,7 @@ module DirtyPipeline
 
     def call
       with_subject_lock { call_next }
+      self
     end
 
     def clean
