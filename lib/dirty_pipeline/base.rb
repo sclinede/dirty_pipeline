@@ -190,7 +190,8 @@ module DirtyPipeline
 
     def run_operation(action, event, *args)
       raise ArgumentError unless action
-      return unless action.respond_to?(operation = railway.active)
+      return unless (operation = railway.active)
+      return unless action.respond_to?(operation)
       action.public_send(operation, event, self, *args)
     end
 
