@@ -1,28 +1,15 @@
 # DirtyPipeline
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/dirty_pipeline`. To experiment with that code, run `bin/console` for an interactive prompt.
+This gem is an attempt to create abstraction over distributed transactions in form of [Sagas](https://microservices.io/patterns/data/saga.html) with Orchestration approach.
 
-TODO: Delete this and the text above, and describe your gem
+This library will implement:
+- Command pattern (to wrap each mutation)
+- Chaining for the Commands
+- Abstraction for persisted transaction (as a series of commands)
+- Transaction locking mechanism (parallel execution handling)
+- Transaction storage mechanism with event sourcing interface, to use with Kafka and Postgres (for transaction persistance) 
 
-## Installation
-
-Add this line to your application's Gemfile:
-
-```ruby
-gem 'dirty_pipeline'
-```
-
-And then execute:
-
-    $ bundle
-
-Or install it yourself as:
-
-    $ gem install dirty_pipeline
-
-## Usage
-
-TODO: Write usage instructions here
+<img src="https://dl.dropboxusercontent.com/s/s5t4behgmmxpakb/754ccf90f4e1d536ab7f7c584b42a17b.gif" alt="Under Construction" width="300" height="300">
 
 ## Development
 
